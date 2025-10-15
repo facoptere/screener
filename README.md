@@ -30,7 +30,7 @@ For the later, 2 CSV files will be produced:
 |	**En Solde**	|	How undervalued the stock is. Example: 0.20 -> stock in undervaluated by 20%	|
 |	**L%H**	|	Where is the stock price related to lowest (0) and highest (1) price in the last 365 days	|
 |	**ChPctPrice5Y**	|	Annual stock price increase in percent, 5 year average, CAGR	|
-|	**AROE5YAVG**	|	Return on equity in percent, 5 year average	|
+|	**qMKTCAP.USD**	|	Worldwide percentile rank in capitalization (100 = most valued companies)	|
 |	**closePriceDate**	|	Last update	|
 
  
