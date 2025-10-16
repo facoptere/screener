@@ -1,3 +1,7 @@
+"""
+DEGIRO connection API client with caching.
+"""
+
 from degiro_connector.trading.api import API as TradingAPI
 from degiro_connector.quotecast.api import API as QuotecastAPI
 from degiro_connector.quotecast.tools.chart_fetcher import ChartFetcher
@@ -10,6 +14,7 @@ import re
 import logging
 import time
 from degiro_connector.trading.models.credentials import Credentials
+from typing import Optional
 
 logger = logging.getLogger()
 
@@ -20,16 +25,16 @@ class cachedDegiroApi(CachedApi):
 
     def __init__(self, file: str, credentials: Credentials):
         self.__credentials = credentials
-        self.__file = file
+        #self.__file = file
         self.__user_token = None
-        self.__trading_api = None
-        self.__quotecast_api = None
+        self.__trading_api: Optional[TradingAPI] = None
+        #self.__quotecast_api = None
 
         super().__init__(file)
 
     def __del__(self):
+        super().__del__()
         logger.debug(f"Instance {self} destroyed.")
-        CachedApi.close(self)
 
     def computeIndex(self, name, **kwargs):
         k = str(kwargs)
@@ -48,7 +53,7 @@ class cachedDegiroApi(CachedApi):
                         self.__session.cookies.set(item["name"], item["value"])
             if headers:
                 self.__session.headers.update(headers)
-            CachedApi.open_db(self)
+            super().open_db()
         self.__trading_api.connect()
         if not self.__user_token:
             time.sleep(3)
@@ -64,7 +69,6 @@ class cachedDegiroApi(CachedApi):
 
     def logout(self):
         self.__trading_api.logout()
-        CachedApi.close(self)
 
     # def get_config(self):
     #    return self.__trading_api.credentials

@@ -1,7 +1,3 @@
-"""
-Base class for API caching using SQLite.
-"""
-
 from time import time_ns, sleep
 from typing import Any, Optional
 from sqlitedict import SqliteDict
@@ -11,10 +7,6 @@ logger = logging.getLogger()
 
 
 class CachedApi:
-    """
-    A base class for caching API responses using SQLite.
-    """
-
     def __init__(self, fullpath: str) -> None:
         self.__fullpath = fullpath
         self.__db: Optional[SqliteDict] = None
@@ -46,20 +38,9 @@ class CachedApi:
                 pass
         logger.debug("DB cleanup: keeping %d items, removed %d items", kept, removed)
 
-    def close(self) -> None:
-        """Close the database connection."""
-        if self.__db:
-            self.__db.commit()
-            self.__db.close()
-            self.__db = None
-            logger.debug("Closing DB %s", self.__fullpath)
 
     def __del__(self) -> None:
-        """Destructor to ensure database is closed."""
-        try:
-            self.close()
-        except Exception:
-            pass
+        logger.debug(f"Instance {self} destroyed.")
 
     def cache_get(self, key: str, period: int) -> Any:
         """

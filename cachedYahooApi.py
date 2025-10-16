@@ -55,12 +55,12 @@ class CachedYahooApi(CachedApi):
             '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
         )
         """
-        CachedApi.open_db(self)
+        super().open_db()
         logger.debug(f"Yahoo setup done")
 
     def __del__(self):
+        super().__del__()
         logger.debug(f"Instance {self} destroyed.")
-        CachedApi.close(self)
 
     """
     def get_chart(self, **kwargs):

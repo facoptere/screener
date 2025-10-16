@@ -5,9 +5,7 @@ from requests.exceptions import HTTPError
 import json
 from lxml import html
 
-
 logger = logging.getLogger()
-
 
 class CachedFrankfurter(CachedApi):
     iso4217 = {"AED":784, "AFN":971, "ALL":8, "AMD":51, "AOA":973, "ARS":32, "AUD":36, "AWG":533, "AZN":944, "BAM":977, "BBD":52, "BDT":50, 
@@ -29,12 +27,12 @@ class CachedFrankfurter(CachedApi):
     
     def __init__(self, file: str):
         super().__init__(file)
-        CachedApi.open_db(self)
+        super().open_db()
         logger.debug(f"frankfurter.app setup done")
         
     def __del__(self):
+        super().__del__()
         logger.debug(f"Instance {self} destroyed.")
-        CachedApi.close(self)    
     
     def convert(self, what: str, inwhat: str):
         rate = self.convert_with_api(what, inwhat)
