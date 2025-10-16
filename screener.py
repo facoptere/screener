@@ -98,7 +98,7 @@ def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
         row = {**row, **company_profile, **company_ratios, **est_summary}
 
         if "isinDebug" in globals() and row["isin"] == isinDebug:
-            logger.fatal(row)
+            logger.fatal(f"row: {str(row)}")
 
         row2 = {}
         for key, value in row.items():
@@ -191,6 +191,10 @@ def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
                 traceback.print_exc()
         elif row["isin"] == isinDebug:
             logger.fatal(f"after yahoo company: \"{row['name']}\" 5YCAGR:{row['ChPctPrice5Y']:.1f}%")
+
+        #if "VOL10DAVG" in row and "MKTCAP.USD" in row and "shrOutstanding" in row:
+        #    if row["VOL10DAVG"] is not None and row["shrOutstanding"] is not None and row["MKTCAP.USD"] is not None:
+        #        row["Vol10D.USD"] = row["VOL10DAVG"] / row["shrOutstanding"] * row["MKTCAP.USD"] / 10**6
 
     except Exception as e:
         print(e)
@@ -304,6 +308,8 @@ def compute(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[df["Rendement"].isna(), "Rendement"] = 0.0
     df.loc[df["YLD+PRY"].isna(), "YLD+PRY"] = 0.0
     df.loc[:, "YLD+PRY"] = df["Rendement"] + df["ChPctPrice5Y"]
+    
+    df = df.drop("__nprice", axis=1)
     
     return df
 
@@ -460,13 +466,15 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         # df.reindex(index=list(range(len(df))))
         # logger.warning(f"Number of stock entries after Q: {df.shape[0]}")
 
+        locale.setlocale(locale.LC_NUMERIC, os.getenv("LANG","C"))
+        
         df[
             [
                 "symbol", "isin", "name", "sector", "industry", "country",  "qscore",  "qscorePerf", "MKTCAP", "REVPS5YGR", 
                 "MARGIN5YR", "Focf2Rev_AAvg5", "ratings_CURR", "ratings_1WA", "VE/EBITDA", "VE/CA", "CAPI/TANG", "PER", "Rendement", "Dette nette / EBITDA", 
                 "Ratio courant", "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", 
                 "EV2FCF_CurTTM", "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", 
-                "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD",
+                "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG"
             ]
         ].to_csv("screener4.csv", index=False, sep="\t", decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format="%.3f", quoting=csv.QUOTE_MINIMAL)
 
@@ -477,7 +485,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
                 "Focf2Rev_AAvg5", "ratings_CURR", "ratings_1WA", "VE/EBITDA", "VE/CA", "CAPI/TANG", "PER", "Rendement", "Dette nette / EBITDA", "Ratio courant",
                 "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", "EV2FCF_CurTTM",
                 "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", "ChPctPrice5Y",
-                "YSymbol", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD",
+                "YSymbol", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG"
             ]
         ].to_csv(
             f"screener-{datetime.now().strftime(daat)}.csv",
@@ -512,7 +520,8 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
 
         ddf = ddf[
             [
-                "YSymbol", "isin", "sector", "country", "name", "industry", "qscore", "qscorePerf", "REVPS5YGR", "MARGIN5YR", "PER", "Rendement", "En Solde", "L%H", "ChPctPrice5Y", "qMKTCAP.USD", "closePriceDate",
+                "isin", "sector", "country", "name", "industry", "qscore", "qscorePerf", "REVPS5YGR", "MARGIN5YR", "PER", "Rendement", "En Solde", 
+                "L%H", "ChPctPrice5Y", "qMKTCAP.USD", "VOL10DAVG"
             ]
         ]
         ddf.to_csv("extrait.csv", index=False, sep=";", decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format="%.3f", quoting=csv.QUOTE_MINIMAL)

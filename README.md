@@ -16,11 +16,9 @@ For the later, 2 CSV files will be produced:
 * `screener4.csv`: all assets from DEGIRO. Roughly 14000 companies are listed
 * `extrait.csv`: excerpt of the first list. Contains undervaluated stocks of very profitable companies.
 
-## Meaning of the columns
+## `extrait.csv` columns meaning
 | Column  | Description |
 | ------------- | ------------- |
-|	**YSymbol**	|	Ticker name on Yahoo Finance	|
-|	**name**	|	Company name	|
 |	**qscore**	|	Score (0-100) as good fundamental ratios	|
 |	**qscorePerf**	|	Score (0-100) as good fundamental ratios plus good momentum	|
 |	**REVPS5YGR**	|	Annual sales increase percent, 5 year average, CAGR	|
@@ -31,6 +29,7 @@ For the later, 2 CSV files will be produced:
 |	**L%H**	|	Where is the stock price related to lowest (0) and highest (1) price in the last 365 days	|
 |	**ChPctPrice5Y**	|	Annual stock price increase in percent, 5 year average, CAGR	|
 |	**qMKTCAP.USD**	|	Worldwide percentile rank in capitalization (100 = most valued companies)	|
-|	**closePriceDate**	|	Last update	|
+|	**Vol10D.USD**	|	Daily volume in USD, 10 day average	|
 
- 
+
+Please note that the produced Dataframe contains 150 columns coming from financial statements, ratios, etc...
