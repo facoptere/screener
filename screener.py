@@ -145,21 +145,34 @@ def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
         try:
             df = None
             if row["vwdId"] and len(row["vwdId"]) > 0:
-                df = trading_api.get_longtermprice(row["vwdId"], Interval.P5Y, Interval.P1M)
-            if (df is None or df.shape[0] == 0) and row["vwdIdSecondary"] and len(row["vwdIdSecondary"]) > 0:
-                df = trading_api.get_longtermprice(row["vwdIdSecondary"], Interval.P5Y, Interval.P1M)
-            if df is not None and df.shape[0] > 1:
-                LastMonthClose = df.iloc[-1]["close"]
-                if "closePriceAgeDays" in row and row['closePriceAgeDays'] < 15 and "closePrice" in row and row["closePrice"] > 0:
-                    if (LastMonthClose-row["closePrice"])/row["closePrice"] < .30:
-                        LastMonthClose = row["closePrice"]
+                df = trading_api.get_longtermprice(row["vwdId"], Interval.P5Y, Interval.P1W)
+            if isinstance(df, pd.DataFrame) and df.shape[0] > 0:
+                pass
+            elif row["vwdIdSecondary"] and len(row["vwdIdSecondary"]) > 0:
+                df = trading_api.get_longtermprice(row["vwdIdSecondary"], Interval.P5Y, Interval.P1W)
+            if isinstance(df, pd.DataFrame) and df.shape[0] > 0:
+                LastWeekClose = df.iloc[-1]["close"]
+                if "closePriceAgeDays" in row and row['closePriceAgeDays'] < 7 and "closePrice" in row and row["closePrice"] > 0:
+                    if (LastWeekClose-row["closePrice"])/row["closePrice"] < .30:
+                        LastWeekClose = row["closePrice"]
                     else:
-                        logger.warning(f"company: \"{row['name']}\" Won't update properly 'ChPctPrice5Y' since prices are too different... LastMonthClose:{LastMonthClose}  Last close: {row['closePrice']}  last close date:{row['closePriceDate']}")
-                row["ChPctPrice5Y"] = (pow(1 + (LastMonthClose - df.iloc[0]["open"]) / df.iloc[0]["open"], 1 / (df.shape[0] / 12)) - 1) * 100
+                        logger.warning(f"company: \"{row['name']}\" Won't update properly 'ChPctPrice5Y' since prices are too different... "
+                                       "LastWeekClose:{LastWeekClose}  Last close: {row['closePrice']}  last close date:{row['closePriceDate']}")
+                row["ChPctPrice5Y"] = (pow(1 + (LastWeekClose - df.iloc[0]["open"]) / df.iloc[0]["open"], 1 / (df.shape[0] / 52)) - 1) * 100
+                if df.shape[0] > 40:
+                    data = df["close"].to_numpy()[-40:]
+                    mask = np.isnan(data)
+                    data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
+                    row["%M200D"] = np.mean(data)
+                    if np.isnan(row["%M200D"]):
+                        logger.fatal(f"nan for {row['isin']} <- {data}")
+                    row["%M200D"] = ((LastWeekClose - row["%M200D"]) / row["%M200D"] * 100.0) if row["%M200D"] > 0.0 else -100.0
+                    row["%M200D"] = round(row["%M200D"])
+
                 if row["isin"] == isinDebug:
                     msg = (
                         f"company: \"{row['name']}\" 5YCAGR:{row['ChPctPrice5Y']:.1f}% nbRows:{df.shape[0]} "
-                        f"open:{df.iloc[0]['open']} close:{LastMonthClose} "
+                        f"open:{df.iloc[0]['open']} close:{LastWeekClose} "
                         f" last close: {row['closePrice']} last close date:{row['closePriceDate']} age:{row['closePriceAgeDays']}\n"
                     )
                     print(msg, df)
@@ -172,18 +185,35 @@ def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
             print(repr(ee))
             traceback.print_exc()
 
-        row["YSymbol"] = np.nan
-        if np.isnan(row["ChPctPrice5Y"]):
+        row["YSymbol"] = ""
+        if np.isnan(row["ChPctPrice5Y"]) or np.isnan(row["%M200D"]):
             try:
-                df, ylabel = yahoo_api.get_longtermprice(row["isin"], row["symbol"], row["name"], "5y", "1mo")
-                if df is not None:
+                df, ylabel = yahoo_api.get_longtermprice(row["isin"], row["symbol"], row["name"], "5y", "1wk")
+                if isinstance(df, pd.DataFrame):
                     if df.shape[0] > 1:
-                        row["ChPctPrice5Y"] = (
-                            pow(1 + (df.iloc[-1]["Close"] - df.iloc[0]["Open"]) / df.iloc[0]["Open"], 1 / (df.shape[0] / 12)) - 1
-                        ) * 100
+                        data = df["Close"].to_numpy()
+                        mask = np.isnan(data)
+                        data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
+                        
+                        LastWeekClose = data[-1]
+                        if np.isnan(row["ChPctPrice5Y"]):
+                            row["ChPctPrice5Y"] = (
+                                pow(1 + (LastWeekClose - data[0]) / data[0], 1 / (df.shape[0] / 52)) - 1
+                            ) * 100
+                        
                         row["YSymbol"] = ylabel
-                elif row["isin"] == isinDebug:
-                    logger.fatal(f"yahoo company: \"{row['name']}\" 5YCAGR:{row['ChPctPrice5Y']} df:{df} last close: {row['closePrice']} last close date:{row['closePriceDate']} age:{row['closePriceAgeDays']}")
+                        
+                        if np.isnan(row["%M200D"]) and df.shape[0] > 40:
+                            data = data[-40:]
+                            row["%M200D"] = np.mean(data)
+                            if np.isnan(row["%M200D"]):
+                                logger.fatal(f"nan for {row['isin']} <- {data}")
+                            row["%M200D"] = ((LastWeekClose - row["%M200D"]) / row["%M200D"] * 100.0) if row["%M200D"] > 0.0 else -100.0
+                            row["%M200D"] = round(row["%M200D"])
+                            
+                if row["isin"] == isinDebug:
+                    logger.fatal(f"yahoo company: \"{row['name']}\" 5YCAGR:{row['ChPctPrice5Y']} df:{df} "
+                                 "last close: {row['closePrice']} last close date:{row['closePriceDate']} age:{row['closePriceAgeDays']}")
             except Exception as ee:
                 print(f"303 error {row['name']}")
                 print(ee)
@@ -192,7 +222,7 @@ def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
         elif row["isin"] == isinDebug:
             logger.fatal(f"after yahoo company: \"{row['name']}\" 5YCAGR:{row['ChPctPrice5Y']:.1f}%")
 
-        #if "VOL10DAVG" in row and "MKTCAP.USD" in row and "shrOutstanding" in row:
+        # if "VOL10DAVG" in row and "MKTCAP.USD" in row and "shrOutstanding" in row:
         #    if row["VOL10DAVG"] is not None and row["shrOutstanding"] is not None and row["MKTCAP.USD"] is not None:
         #        row["Vol10D.USD"] = row["VOL10DAVG"] / row["shrOutstanding"] * row["MKTCAP.USD"] / 10**6
 
@@ -268,8 +298,10 @@ def compute(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[df["Net Income"].isna(), "Net Income"] = df["TTMNIAC"] / 10**6
     df.loc[df["Net Income"].isna(), "Net Income"] = df["ANIAC"] / 10**6
     df.loc[:, "__nprice"] = df["NPRICE"]
-    df.loc[:, "L%H"] = (df["__nprice"] - df["NLOW"]) / (df["NHIG"] - df["NLOW"])
-    df.loc[:, "%M200D"] = (df["closePrice"] - df["%M200D"]) / df["%M200D"]
+    df["L%H"] = -1.0
+    df.loc[(df["__nprice"] > 0) & (df["NHIG"] > df["NLOW"]), "L%H"] = (df["__nprice"] - df["NLOW"]) / (df["NHIG"] - df["NLOW"]) * 100.0
+    df["L%H"] = df["L%H"].round()
+    #df.loc[:, "%M200D"] = (df["closePrice"] - df["%M200D"]) / df["%M200D"]
     df.loc[df["EBITDA"].isna(), "EBITDA"] = df["AEBITD"] / 10**6
     df.loc[:, "VE/EBITDA"] = (df["EV"].clip(lower=epsilon) / df["EBITDA"].clip(lower=epsilon) / 10**6).clip(upper=cap)
     df.loc[:, "VE/CA"] = (df["EV"].clip(lower=epsilon) / df["TTMREV"].clip(lower=epsilon)).clip(upper=cap)
@@ -302,8 +334,11 @@ def compute(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[:, "VE/FCF"] = df["VE/FCF"].clip(lower=epsilon, upper=cap)
     df.loc[:, "Juste Prix"] = (df["Net Income"] * df["PER"] - df["Dette nette"] / 10**6) / df["shrOutstanding"]
     df.loc[(df["Juste Prix"] <= 0) | (df["Juste Prix"].isna()), "Juste Prix"] = epsilon
-    df.loc[df["Juste Prix"] > df["__nprice"], "En Solde"] = (df["Juste Prix"] - df["__nprice"]) / df["Juste Prix"]
-    df.loc[df["Juste Prix"] <= df["__nprice"], "En Solde"] = (df["Juste Prix"] - df["__nprice"]) / df["__nprice"]
+    df["En Solde"] = -100.0
+    df.loc[(df["Juste Prix"] != 0) & (df["Juste Prix"] > df["__nprice"]), "En Solde"] = (df["Juste Prix"] - df["__nprice"]) / df["Juste Prix"] * 100.0
+    df.loc[(df["__nprice"] != 0) & (df["Juste Prix"] <= df["__nprice"]), "En Solde"] = (df["Juste Prix"] - df["__nprice"]) / df["__nprice"] * 100.0
+    df["En Solde"] = df["En Solde"].round()
+    
 
     df.loc[df["Rendement"].isna(), "Rendement"] = 0.0
     df.loc[df["YLD+PRY"].isna(), "YLD+PRY"] = 0.0
@@ -422,7 +457,10 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
             QQ = Q[c].to_numpy()
             df[f"q{c}"] = df.apply(lambda x: np.argmin(QQ < x[c]).astype(int), axis=1)   
         
-        cols = ["REVPS5YGR", "MARGIN5YR", "Focf2Rev_AAvg5", "score", "En Solde", "YLD+PRY"]
+        cols = ["REVPS5YGR", "EPSTRENDGR", "MARGIN5YR", "Focf2Rev_AAvg5", "score", "En Solde", "YLD+PRY"]
+        weight = [1] * len(cols)
+        weight[cols.index("score")] = len(cols)
+        sumweight = np.sum(weight)
         qdf = df[cols].copy()
         for c in cols:
             qdf.loc[qdf[c].isna() | qdf[c].isnull(), c] = 0.0
@@ -436,20 +474,22 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
             QQ = Q[c].to_numpy()
             QQ[1] = QQ[50]  # 'qc' column will get a 1 when 'c' below percentile [], and so won't contribute to scorePerf
             QQ[0] = QQ[20]  # 'qc' column will get a 0 when 'c' below percentile [], and so the final scorePerf =0
-            qdf[qc] = qdf.apply(lambda x: np.argmin(QQ < x[c]).astype(int), axis=1)    
+            qdf[qc] = qdf.apply(lambda x: np.argmin(QQ < x[c]).astype(int)/10.0, axis=1)    
             
         qdf["scorePerf"] = 100.0
         
-        for c in cols:
+        for i, c in enumerate(cols):
             qc = f"q{c}"
-            qdf.loc[qdf[qc].notna(), "scorePerf"] *= qdf[qc] ** 2.0    
+            qdf.loc[qdf[qc].notna(), "scorePerf"] *= qdf[qc] ** (2.0 * weight[i])
         
         Q = qdf[qdf["scorePerf"] > 0][["scorePerf"]].quantile(
             numeric_only=True, q=list(np.arange(0.0, 1.01, 0.01).astype(float))
         )
         QQ = Q["scorePerf"].to_numpy()
         df["qscorePerf"] = qdf.apply(lambda x: np.argmin(QQ < x["scorePerf"]).astype(int), axis=1) 
-        df["scorePerf"] = qdf["scorePerf"].pow(1.0 / (2.0 * len(cols)))
+        df["scorePerf"] = qdf["scorePerf"].pow(1.0 / (2.0 * sumweight))
+        
+        df = df.convert_dtypes()
 
         return df
     else:
@@ -462,7 +502,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
     if info_df is not None:
         df = info_df.copy()
         #df.reset_index()
-        df = df.sort_values(by=["country", "score"], ascending=[True, False])
+        df = df.sort_values(by=["country", "qscorePerf", "score"], ascending=[True, False, False])
         # df.reindex(index=list(range(len(df))))
         # logger.warning(f"Number of stock entries after Q: {df.shape[0]}")
 
@@ -474,7 +514,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
                 "MARGIN5YR", "Focf2Rev_AAvg5", "ratings_CURR", "ratings_1WA", "VE/EBITDA", "VE/CA", "CAPI/TANG", "PER", "Rendement", "Dette nette / EBITDA", 
                 "Ratio courant", "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", 
                 "EV2FCF_CurTTM", "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", 
-                "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG"
+                "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG","EPSTRENDGR",
             ]
         ].to_csv("screener4.csv", index=False, sep="\t", decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format="%.3f", quoting=csv.QUOTE_MINIMAL)
 
@@ -485,7 +525,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
                 "Focf2Rev_AAvg5", "ratings_CURR", "ratings_1WA", "VE/EBITDA", "VE/CA", "CAPI/TANG", "PER", "Rendement", "Dette nette / EBITDA", "Ratio courant",
                 "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", "EV2FCF_CurTTM",
                 "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", "ChPctPrice5Y",
-                "YSymbol", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG"
+                "YSymbol", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG","EPSTRENDGR",
             ]
         ].to_csv(
             f"screener-{datetime.now().strftime(daat)}.csv",
@@ -500,13 +540,16 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         ddf = df.copy()
 
         QS = 80.0  # score loic
-        QSP = 95.0  # score loic + perf
-        REV = 5   # croissance revenu
-        MRG = 10   # marge
-        SLD = .2  # en solde de x%
-        LH = 1  # cours relatif entre le plus bas annuel et le plus haut [0,1]
-        YLD = 17  # rendement dividende+prix
+        QSP = 90.0  # score loic + perf
+        REV = 3   # croissance revenu
+        EPS = 3   # croissance des profits nets
+        MRG = 7   # marge
+        SLD = 10  # en solde de x%
+        LH = 100  # cours relatif entre le plus bas annuel et le plus haut [0,1]
+        YLD = 10  # rendement dividende+prix
         PRX = 0   # croissance annuelle du prix de l'action, sans les dividendes
+        MCAP = 5*10**7
+        
         ddf = ddf[
             (ddf["qscore"] >= QS)
             & (ddf["qscorePerf"] >= QSP)
@@ -516,15 +559,24 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             & (ddf["L%H"] <= LH)
             & (ddf["ChPctPrice5Y"] >= PRX)
             & (ddf["YLD+PRY"] >= YLD)
+            & (ddf["MKTCAP.USD"] >= MCAP)
         ]
+        
+        # Removing banks, freight, holdings and mines
+        ddf["keep"] = 1
+        ddf.loc[(ddf["sector"].str.contains("Financial", case=False, regex=True) & ddf["industry"].str.contains("(?:bank|investment)", case=False, regex=True)), "keep"] = 0
+        ddf.loc[(ddf["sector"].str.contains("Basic Materials", case=False, regex=True) & ddf["industry"].str.contains("Mining", case=False, regex=True)), "keep"] = 0
+        ddf.loc[(ddf["sector"].str.contains("Transportation", case=False, regex=True) & ddf["industry"].str.contains("Freight", case=False, regex=True)), "keep"] = 0
+        ddf.loc[ddf["name"].str.contains("holding", case=False, regex=True), "keep"] = 0
+        ddf = ddf[ddf["keep"] == 1]
 
         ddf = ddf[
             [
-                "isin", "sector", "country", "name", "industry", "qscore", "qscorePerf", "REVPS5YGR", "MARGIN5YR", "PER", "Rendement", "En Solde", 
-                "L%H", "ChPctPrice5Y", "qMKTCAP.USD", "VOL10DAVG"
+                "isin", "sector", "country", "name", "industry", "qscore", "qscorePerf", "REVPS5YGR", "EPSTRENDGR", "MARGIN5YR", "PER",  "En Solde", 
+                "L%H", "%M200D", "ChPctPrice5Y", "Rendement", "qMKTCAP.USD", "VOL10DAVG"
             ]
         ]
-        ddf.to_csv("extrait.csv", index=False, sep=";", decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format="%.3f", quoting=csv.QUOTE_MINIMAL)
+        ddf.to_csv("extrait.csv", index=False, sep=";", decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format="%.1f", quoting=csv.QUOTE_MINIMAL)
 
 
         telegram_token = os.getenv("GT_TL_TOKEN") or ""
@@ -535,7 +587,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             uch2 = "\u2001"
             msg = (
                 f"Screener {datetime.now().strftime(daat)}{uch2}{ddf.shape[0]}{uch}{df.shape[0]}{uch2}"
-                f"Ratios: QS={QS:.0f} QSP={QSP:.0f} REV={REV:.1f} MRG={MRG:.1f} SLD={SLD:.2f} LH={LH:.2f} YLD={YLD:.1f}"
+                f"Ratios: QS={QS:.0f} QSP={QSP:.0f} REV={REV:.1f} EPS={EPS:.1f} MRG={MRG:.1f} SLD={SLD:.2f} LH={LH:.2f} YLD={YLD:.1f} MCAP={MCAP:.0f}"
             )
             send_doc_to_telegram(
                 {"message": {"apiToken": telegram_token, "chatID": telegram_chatid}},
