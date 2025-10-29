@@ -344,7 +344,7 @@ def compute(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[df["YLD+PRY"].isna(), "YLD+PRY"] = 0.0
     df.loc[:, "YLD+PRY"] = df["Rendement"] + df["ChPctPrice5Y"]
     
-    df = df.drop("__nprice", axis=1)
+    #df = df.drop("__nprice", axis=1)
     
     return df
 
@@ -407,6 +407,39 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
     return info_df
 
 
+# DCF FCFF 
+def compute_dcf(ddf: pd.DataFrame, g: float, t: float, DCFstr: str, SalesStr: str) -> pd.DataFrame:
+    ddf['NetDebtShr'] = ddf['NetDebt_I'].fillna(ddf['NetDebt_A']) / ddf['shrOutstanding'] / 1e6
+
+    ddf['FOCF5Y'] = ddf['FOCF_AYr5CAGR'].fillna(ddf['EPSTRENDGR']).fillna(0.0)
+    ddf.loc[ddf['FOCF5Y'] > g, 'FOCF5Y'] = g
+    ddf['FOCF5Y'] = 1.0 + ddf['FOCF5Y']/100.0
+    
+    for c in ['TTMFCFSHR', 'A1FCF', 'TTMDIVSHR', 'ADIVSHR']:
+        ddf.loc[ddf[c].isna(), c] = 0.0
+        
+    ddf['tmp'] = (ddf['TTMFCFSHR'] + (ddf['A1FCF']/ddf['shrOutstanding']/ 1e6) + ddf['TTMDIVSHR'] + ddf['ADIVSHR']) / 2.0  # FCFE + Dividendes = FCFF
+    ddf[DCFstr] = ddf['tmp']
+    ddf[DCFstr] =   ddf[DCFstr] * (ddf['FOCF5Y']/(1+g)).pow(1) + \
+                    ddf[DCFstr] * (ddf['FOCF5Y']/(1+g)).pow(2) + \
+                    ddf[DCFstr] * (ddf['FOCF5Y']/(1+g)).pow(3) + \
+                    ddf[DCFstr] * (ddf['FOCF5Y']/(1+g)).pow(4) + \
+                    ddf[DCFstr] * (ddf['FOCF5Y']/(1+g)).pow(5) + \
+                    ddf[DCFstr] * (ddf['FOCF5Y']/(1+g)).pow(5)*(1+t)/(g-t) - \
+                    ddf['NetDebtShr']
+    ddf.loc[ddf[DCFstr] < 0.0, DCFstr] = 0.0
+                
+    ddf[SalesStr] = -100.0
+    ddf.loc[(ddf[DCFstr] != 0) & (ddf[DCFstr] > ddf["__nprice"]), SalesStr] = (ddf[DCFstr] - ddf["__nprice"]) / ddf[DCFstr] * 100.0
+    ddf.loc[(ddf["__nprice"] != 0) & (ddf[DCFstr] <= ddf["__nprice"]), SalesStr] = (ddf[DCFstr] - ddf["__nprice"]) / ddf["__nprice"] * 100.0
+    ddf.loc[ddf[SalesStr] < -100.0, SalesStr] = -100.0
+    ddf[SalesStr] = ddf[SalesStr].round()
+    
+    #ddf = ddf.drop('FOCF5Y', axis=1)
+    
+    return ddf
+
+
 def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> Optional[pd.DataFrame]:
     global isinDebug
     global filterCountry
@@ -449,6 +482,7 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
 
     if info_df.shape[0] > 0:
         df = compute_rank(info_df, "score", ranking)
+        df = compute_dcf(df, g=13.0/100.0, t=4.5/100.0, DCFstr="DCF", SalesStr="EnSolde2")
         cols = ["score", "MKTCAP.USD"]
         Q = df[cols].quantile(
             numeric_only=True, q=list(np.arange(0.0, 1.01, 0.01).astype(float))
@@ -457,7 +491,7 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
             QQ = Q[c].to_numpy()
             df[f"q{c}"] = df.apply(lambda x: np.argmin(QQ < x[c]).astype(int), axis=1)   
         
-        cols = ["REVPS5YGR", "EPSTRENDGR", "MARGIN5YR", "Focf2Rev_AAvg5", "score", "En Solde", "YLD+PRY"]
+        cols = [ "EPSTRENDGR", "Focf2Rev_AAvg5", "score", "EnSolde2", "YLD+PRY"]
         weight = [1] * len(cols)
         weight[cols.index("score")] = len(cols)
         sumweight = np.sum(weight)
@@ -497,105 +531,118 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
         return None
 
 
+def build_csv(df: pd.DataFrame, critMinValue, critRemoveRegex, columns, filename, separator, fformat, tformat) -> pd.DataFrame:
+    ddf = df.copy()
+
+    if critMinValue:
+        for c in critMinValue:
+                column = c[0]
+                valuemin = c[2]
+                ddf = ddf[ddf[column] >= valuemin]
+
+    if critRemoveRegex:
+        ddf["keep"] = 1
+        for c in critRemoveRegex:
+                column1 = c[0]
+                regex1 = c[1]
+                column2 = c[2]
+                regex2 = c[3]
+                ddf.loc[(ddf[column1].str.contains(regex1, case=False, regex=True) & ddf[column2].str.contains(regex2, case=False, regex=True)), "keep"] = 0
+        ddf = ddf[ddf["keep"] == 1].sort_values(by=["country", "qscorePerf", "score"], ascending=[True, False, False])
+
+    if tformat:
+        ddf["name"] = ddf["name"].str.slice(0, tformat)
+        ddf["industry"] = ddf["industry"].str.slice(0, tformat)
+
+    ddf = ddf[columns]
+    ddf.to_csv(filename, index=False, sep=separator, decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format=fformat, quoting=csv.QUOTE_MINIMAL)
+    
+    return ddf
+
+
+def push_telegram(token, chat, init_msg, crit, filename):
+    telegram_token = os.getenv(token) or ""
+    telegram_chatid = os.getenv(chat) or ""
+    if telegram_token and telegram_chatid:
+        msg = [init_msg, "Ratios:"]
+        for c in crit:
+            label = c[1]
+            val = c[2]
+            msg.append(f"{label}={val:.0f}")
+        msg = " ".join(msg)
+        send_doc_to_telegram(
+            {"message": {"apiToken": telegram_token, "chatID": telegram_chatid}},
+            msg,
+            filename,
+        )
+        
+        
 def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> Optional[pd.DataFrame]:
     info_df = Screener(cookies, headers, _isinDebug, _filterCountry)
     if info_df is not None:
-        df = info_df.copy()
-        #df.reset_index()
-        df = df.sort_values(by=["country", "qscorePerf", "score"], ascending=[True, False, False])
-        # df.reindex(index=list(range(len(df))))
-        # logger.warning(f"Number of stock entries after Q: {df.shape[0]}")
-
-        locale.setlocale(locale.LC_NUMERIC, os.getenv("LANG","C"))
+        info_df = info_df.sort_values(by=["country", "qscorePerf", "score"], ascending=[True, False, False])
         
-        df[
-            [
-                "symbol", "isin", "name", "sector", "industry", "country",  "qscore",  "qscorePerf", "MKTCAP", "REVPS5YGR", 
-                "MARGIN5YR", "Focf2Rev_AAvg5", "ratings_CURR", "ratings_1WA", "VE/EBITDA", "VE/CA", "CAPI/TANG", "PER", "Rendement", "Dette nette / EBITDA", 
-                "Ratio courant", "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", 
-                "EV2FCF_CurTTM", "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", 
-                "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG","EPSTRENDGR",
-            ]
-        ].to_csv("screener4.csv", index=False, sep="\t", decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format="%.3f", quoting=csv.QUOTE_MINIMAL)
-
-        daat = "%y-%m-%W"
-        df[
-            [
-                "symbol", "isin", "name", "sector", "industry", "country",  "qscore",  "qscorePerf", "MKTCAP", "REVPS5YGR", "MARGIN5YR",
-                "Focf2Rev_AAvg5", "ratings_CURR", "ratings_1WA", "VE/EBITDA", "VE/CA", "CAPI/TANG", "PER", "Rendement", "Dette nette / EBITDA", "Ratio courant",
-                "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", "EV2FCF_CurTTM",
-                "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", "ChPctPrice5Y",
-                "YSymbol", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG","EPSTRENDGR",
-            ]
-        ].to_csv(
-            f"screener-{datetime.now().strftime(daat)}.csv",
-            index=False,
-            sep="\t",
-            decimal=locale.localeconv()["decimal_point"],
-            encoding="utf-8-sig",
-            float_format="%.3f",
-            quoting=csv.QUOTE_MINIMAL,
+        locale.setlocale(locale.LC_NUMERIC, os.getenv("LANG", "C"))
+        
+        columns = [
+            "symbol", "isin", "name", "sector", "industry", "country",  "qscore",  "qscorePerf", "MKTCAP", "REVPS5YGR", 
+            "MARGIN5YR", "Focf2Rev_AAvg5", "ratings_CURR", "ratings_1WA", "VE/EBITDA", "VE/CA", "CAPI/TANG", "PER", "Rendement", "Dette nette / EBITDA", 
+            "Ratio courant", "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", 
+            "EV2FCF_CurTTM", "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", 
+            "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG", "EPSTRENDGR", "EnSolde2", 'DCF', 'TTMFCFSHR', 'FOCF_AYr5CAGR' 
+        ]
+        build_csv(info_df, None, None, columns, "screener4.csv", "\t", "%.1f", 40)
+        
+        
+        
+ 
+        filename = f"screener-{datetime.now().strftime('%y-%m-%W')}.csv"
+        columns = [
+            "symbol", "isin", "name", "sector", "industry", "country",  "qscore",  "qscorePerf", "MKTCAP", "REVPS5YGR", "MARGIN5YR",
+            "Focf2Rev_AAvg5", "ratings_CURR", "ratings_1WA", "VE/EBITDA", "VE/CA", "CAPI/TANG", "PER", "Rendement", "Dette nette / EBITDA", "Ratio courant",
+            "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", "EV2FCF_CurTTM",
+            "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", "ChPctPrice5Y",
+            "YSymbol", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG", "EPSTRENDGR", "EnSolde2", 'DCF', 'TTMFCFSHR', 'FOCF_AYr5CAGR' 
+        ]
+        build_csv(info_df, None, None, columns, filename, "\t", "%.3f", 0)
+        
+        
+        
+        columns = [ 
+            "isin", "sector", "country", "name", "industry", "qscore", "qscorePerf", "EPSTRENDGR", "Focf2Rev_AAvg5",  "EnSolde2", 
+            'DCF', "L%H", 'PR13WKPCTR', "%M200D", "ChPctPrice5Y", "Rendement", "qMKTCAP.USD", "VOL10DAVG"
+        ]
+        crit = (
+            ("qscore", "QS", 80),       # score loic
+            ("qscorePerf", "QSP", 80),  # score loic + perf
+            #("REVPS5YGR", "REV", 3),    # croissance revenu
+            ("EPSTRENDGR", "EPS", 0),   # croissance des profits nets
+            ("Focf2Rev_AAvg5", "FCF", 4),    # ratio FOCF / Rev
+            ("EnSolde2", "SLD",   10),   # en solde de x%   DCF FCFF (discounted cash flow from free cash flow to the firm)
+            ("ChPctPrice5Y", "PRX", 0),  # croissance annuelle du prix de l'action, sans les dividendes
+            ("YLD+PRY", "YLD", 10),      # rendement dividende + croissance du prix annuel
+            ("MKTCAP.USD", "MCAP", 5*1e7),  # market cap
+            ("PR13WKPCTR", "PRX3M", 0),     # croissance du prix de l'action ces 3 derniers mois
         )
-
-        ddf = df.copy()
-
-        QS = 80.0  # score loic
-        QSP = 90.0  # score loic + perf
-        REV = 3   # croissance revenu
-        EPS = 3   # croissance des profits nets
-        MRG = 7   # marge
-        SLD = 10  # en solde de x%
-        LH = 100  # cours relatif entre le plus bas annuel et le plus haut [0,1]
-        YLD = 10  # rendement dividende+prix
-        PRX = 0   # croissance annuelle du prix de l'action, sans les dividendes
-        MCAP = 5*10**7
-        
-        ddf = ddf[
-            (ddf["qscore"] >= QS)
-            & (ddf["qscorePerf"] >= QSP)
-            & (ddf["REVPS5YGR"] >= REV)
-            & (ddf["MARGIN5YR"] >= MRG)
-            & (ddf["En Solde"] >= SLD)
-            & (ddf["L%H"] <= LH)
-            & (ddf["ChPctPrice5Y"] >= PRX)
-            & (ddf["YLD+PRY"] >= YLD)
-            & (ddf["MKTCAP.USD"] >= MCAP)
-        ]
-        
         # Removing banks, freight, holdings and mines
-        ddf["keep"] = 1
-        ddf.loc[(ddf["sector"].str.contains("Financial", case=False, regex=True) & ddf["industry"].str.contains("(?:bank|investment)", case=False, regex=True)), "keep"] = 0
-        ddf.loc[(ddf["sector"].str.contains("Basic Materials", case=False, regex=True) & ddf["industry"].str.contains("Mining", case=False, regex=True)), "keep"] = 0
-        ddf.loc[(ddf["sector"].str.contains("Transportation", case=False, regex=True) & ddf["industry"].str.contains("Freight", case=False, regex=True)), "keep"] = 0
-        ddf.loc[ddf["name"].str.contains("holding", case=False, regex=True), "keep"] = 0
-        ddf = ddf[ddf["keep"] == 1]
-
-        ddf = ddf[
-            [
-                "isin", "sector", "country", "name", "industry", "qscore", "qscorePerf", "REVPS5YGR", "EPSTRENDGR", "MARGIN5YR", "PER",  "En Solde", 
-                "L%H", "%M200D", "ChPctPrice5Y", "Rendement", "qMKTCAP.USD", "VOL10DAVG"
-            ]
-        ]
-        ddf.to_csv("extrait.csv", index=False, sep=";", decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format="%.1f", quoting=csv.QUOTE_MINIMAL)
-
-
-        telegram_token = os.getenv("GT_TL_TOKEN") or ""
-        telegram_chatid = os.getenv("GT_TL_CHAT") or ""
-        if telegram_token:
-            uch = "\u2571"
-            daat = f"%Y{uch}%m{uch}%d"
-            uch2 = "\u2001"
-            msg = (
-                f"Screener {datetime.now().strftime(daat)}{uch2}{ddf.shape[0]}{uch}{df.shape[0]}{uch2}"
-                f"Ratios: QS={QS:.0f} QSP={QSP:.0f} REV={REV:.1f} EPS={EPS:.1f} MRG={MRG:.1f} SLD={SLD:.2f} LH={LH:.2f} YLD={YLD:.1f} MCAP={MCAP:.0f}"
-            )
-            send_doc_to_telegram(
-                {"message": {"apiToken": telegram_token, "chatID": telegram_chatid}},
-                msg,
-                "extrait.csv",
-            )
-
-        return df
+        critRemoveRegex = (
+            ("sector", "Financial", "industry", "(?:bank|investment)"),
+            ("sector", "Basic Materials", "industry", "Mining"),
+            ("sector", "Transportation", "industry", "Freight"),
+            ("name", "holding", "name", "holding"),
+        )
+        ddf = build_csv(info_df, crit, critRemoveRegex, columns, "extrait.csv", ";", "%.1f", 40)
+        
+        
+        
+        uch = "\u2571"
+        daat = f"%Y{uch}%m{uch}%d"
+        uch2 = "\u2001"
+        init_msg = f"Screener {datetime.now().strftime(daat)}{uch2}{ddf.shape[0]}{uch}{info_df.shape[0]}{uch2}"
+        
+        push_telegram("GT_TL_TOKEN", "GT_TL_CHAT", init_msg, crit, "extrait.csv")
+        
+    return info_df
 
 
 
