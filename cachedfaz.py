@@ -34,7 +34,7 @@ class CachedFrankfurter(CachedApi):
         super().__del__()
         logger.debug(f"Instance {self} destroyed.")
     
-    def convert(self, what: str, inwhat: str):
+    def convert(self, what: str, inwhat: str):  # how much what in 1 inwhat?
         rate = self.convert_with_api(what, inwhat)
         if rate < 0.0:
             rate = self.convert_with_www(what, inwhat)
@@ -65,7 +65,7 @@ class CachedFrankfurter(CachedApi):
                     span_element = tree.xpath('//span[@class="bigone"]')[0]
                     text = span_element.text_content().strip().split()[0]
                     numeric_str = text.replace('.', '').replace(',', '.')
-                    r = float(numeric_str) / 10000.0
+                    r = 10000.0 / float(numeric_str)
                 else:
                     r = -6.0
             else:
@@ -78,7 +78,7 @@ class CachedFrankfurter(CachedApi):
     
     
     def convert_with_api(self, what: str, inwhat: str):
-        k = f"convert8{what}{inwhat}"
+        k = f"convert10{what}{inwhat}"
         r = self.cache_get(k, 24*3600)
         if r is None:
             try:
@@ -108,9 +108,10 @@ class CachedFrankfurter(CachedApi):
         else:
             try:
                 data = json.loads(r)
+                logger.debug(f"FAZ API json  {data}")
                 r = data["rates"][inwhat.upper()]
                 if r and isinstance(r, str) or isinstance(r, int) or isinstance(r, float):
-                    r = float(r) / 10000.0
+                    r = 10000.0 / float(r)
                 else:
                     logger.error(f"unknown reply {type(r)} ")
                     r = -3.0

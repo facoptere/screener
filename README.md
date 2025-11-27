@@ -31,7 +31,7 @@ For the later, 2 CSV files will be produced:
 |	**ChPctPrice5Y**	|	% Annual stock price increase, 5 year average, CAGR	|
 |	**Rendement**	|	% Annual dividend yield	|
 |	**qMKTCAP.USD**	|	Worldwide percentile rank in capitalization (100 = most valued companies)	|
-|	**Vol10D.USD**	|	Daily volume of traded shares, 10 day average	|
+|	**Vol10D**	|	Daily volume of traded shares, 10 day average	|
 
 
 Please note that the produced Python Dataframe contains 150 columns coming from financial statements, ratios, etc...

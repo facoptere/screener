@@ -125,12 +125,12 @@ def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
                     oldcur2 = "GBP"
                 else:
                     oldcur2 = oldcur
-                rate = forex_api.convert(oldcur2, "USD")
+                rate = forex_api.convert(oldcur2, "USD") # how much for 1 USD ?
                 if isinstance(rate, float) and rate > 0.0:
-                    newcap = rate * float(oldcap)
+                    newcap = float(oldcap) / rate
                     if oldcur == "GBX":
                         newcap /= 100.0
-                    # logger.fatal(f"{row["name"]} {row["isin"]} {oldcap} {oldcur} -> {newcap:.2f} USD")
+                    #logger.fatal(f"{row['name']} {row['isin']} {oldcap} {oldcur} -> {newcap:.2f} USD   (rate : {rate:.3f} {oldcur2} for 1 USD)")
                     row["MKTCAP.USD"] = newcap
                 else:
                     logger.fatal(f"{p.isin} cannot convert {row['MKTCAP']}  priceCurrency=\"{row.get('priceCurrency', '')}\"  reportCurrency=\"{row['reportCurrency']}\" currency=\"{row.get('currency', '')}\" quoteCurrency=\"{row.get('quoteCurrency', '')}\"    ")
@@ -589,7 +589,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             "MARGIN5YR", "Focf2Rev_AAvg5", "ratings_CURR", "ratings_1WA", "VE/EBITDA", "VE/CA", "CAPI/TANG", "PER", "Rendement", "Dette nette / EBITDA", 
             "Ratio courant", "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", 
             "EV2FCF_CurTTM", "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", 
-            "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG", "EPSTRENDGR", "EnSolde2", 'DCF', 'TTMFCFSHR', 'FOCF_AYr5CAGR' 
+            "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG", "EPSTRENDGR", "EnSolde2", 'DCF', 'TTMFCFSHR', 'FOCF_AYr5CAGR', "MKTCAP.USD",
         ]
         build_csv(info_df, None, None, columns, "screener4.csv", "\t", "%.1f", 40)
         
