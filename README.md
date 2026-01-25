@@ -35,3 +35,7 @@ For the later, 2 CSV files will be produced:
 
 
 Please note that the produced Python Dataframe contains 150 columns coming from financial statements, ratios, etc...
+
+## Reports
+Special reports are performed using Perplexity AI, based on companies listed on [extrait.csv]. Only companies with the strongest upside are kept here.
+
