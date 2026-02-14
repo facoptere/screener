@@ -626,9 +626,9 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         )
         # Removing banks, freight, holdings and mines
         critRemoveRegex = (
-            ("sector", "Financial", "industry", "(?:bank|investment)"),
+            ("sector", "Financial", "industry", "(?:bank|investment|Financial)"),
             ("sector", "Basic Materials", "industry", "Mining"),
-            ("sector", "Transportation", "industry", "Freight"),
+            ("sector", "Transportation", "industry", "(?:Freight|Tankers)"),
             ("name", "holding", "name", "holding"),
         )
         ddf = build_csv(info_df, crit, critRemoveRegex, columns, "extrait.csv", ";", "%.1f", 40)
