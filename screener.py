@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from utils import crapy_estimates_summaries_get
 from xvfb import openWindow
 import locale
+from itertools import repeat
 
 """
 import http.client
@@ -34,17 +35,18 @@ isinDebug = "JP3860220007"
 filterCountry = None
 logger = logging.getLogger()    
 
-def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
-    p = DictObj(dict(product))
+def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
     row = {}
-
     try:
+        p = DictObj(dict(product))
         try:
             row["symbol"] = p.symbol
         except BaseException:
             row["symbol"] = p.isin
         row["isin"] = p.isin
-
+        row["country"] = country
+        row["name"] = p.name.upper()
+        
         if "isinDebug" in globals() and p.isin == isinDebug:
             logger.fatal(json.dumps(product))
         row["id"] = p.id
@@ -53,7 +55,6 @@ def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
             f"{p.vwdIdentifierTypeSecondary}:{p.vwdIdSecondary}" if hasattr(p, "vwdIdSecondary") and hasattr(p, "vwdIdentifierTypeSecondary") else ""
         )
 
-        row["name"] = p.name.upper()
         row["closePrice"] = p.closePrice if hasattr(p, "closePrice") else np.nan
         row["closePriceDate"] = np.nan
         if hasattr(p, "closePriceDate"): 
@@ -153,11 +154,10 @@ def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
             if isinstance(df, pd.DataFrame) and df.shape[0] > 0:
                 LastWeekClose = df.iloc[-1]["close"]
                 if "closePriceAgeDays" in row and row['closePriceAgeDays'] < 7 and "closePrice" in row and row["closePrice"] > 0:
-                    if (LastWeekClose-row["closePrice"])/row["closePrice"] < .30:
+                    if abs(LastWeekClose-row["closePrice"])/row["closePrice"] < .30:
                         LastWeekClose = row["closePrice"]
                     else:
-                        logger.warning(f"company: \"{row['name']}\" Won't update properly 'ChPctPrice5Y' since prices are too different... "
-                                       "LastWeekClose:{LastWeekClose}  Last close: {row['closePrice']}  last close date:{row['closePriceDate']}")
+                        logger.warning(f"company: \"{row['name']}\" Won't update properly 'ChPctPrice5Y' since prices are too different...  LastWeekClose:{LastWeekClose}  Last close: {row['closePrice']}  last close date:{row['closePriceDate']}")
                 row["ChPctPrice5Y"] = (pow(1 + (LastWeekClose - df.iloc[0]["open"]) / df.iloc[0]["open"], 1 / (df.shape[0] / 52)) - 1) * 100
                 if df.shape[0] > 40:
                     data = df["close"].to_numpy()[-40:]
@@ -184,11 +184,24 @@ def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
             print(ee)
             print(repr(ee))
             traceback.print_exc()
-
+        
         row["YSymbol"] = ""
-        if np.isnan(row["ChPctPrice5Y"]) or np.isnan(row["%M200D"]):
+        ylabel = None
+        try :
+            relatedExchanges = []
+            if country in trading_api.country2hiqAbbrs:
+                relatedExchanges = list(trading_api.country2hiqAbbrs[country])
+            ylabel = yahoo_api.product_search(row["isin"], row["symbol"], row["name"], relatedExchanges)
+            if ylabel:
+                row["YSymbol"] = ylabel
+        except:
+            logger.warning(f"Error yahoo_api.product_search {row['isin']}")
+            traceback.print_exc()
+            pass
+        
+        if ylabel and isinstance(ylabel, str) and (np.isnan(row["ChPctPrice5Y"]) or np.isnan(row["%M200D"])):
             try:
-                df, ylabel = yahoo_api.get_longtermprice(row["isin"], row["symbol"], row["name"], "5y", "1wk")
+                df = yahoo_api.get_longtermprice(ylabel, "5y", "1wk")
                 if isinstance(df, pd.DataFrame):
                     if df.shape[0] > 1:
                         data = df["Close"].to_numpy()
@@ -200,9 +213,7 @@ def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
                             row["ChPctPrice5Y"] = (
                                 pow(1 + (LastWeekClose - data[0]) / data[0], 1 / (df.shape[0] / 52)) - 1
                             ) * 100
-                        
-                        row["YSymbol"] = ylabel
-                        
+
                         if np.isnan(row["%M200D"]) and df.shape[0] > 40:
                             data = data[-40:]
                             row["%M200D"] = np.mean(data)
@@ -213,21 +224,15 @@ def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
                             
                 if row["isin"] == isinDebug:
                     logger.fatal(f"yahoo company: \"{row['name']}\" 5YCAGR:{row['ChPctPrice5Y']} df:{df} "
-                                 "last close: {row['closePrice']} last close date:{row['closePriceDate']} age:{row['closePriceAgeDays']}")
+                                "last close: {row['closePrice']} last close date:{row['closePriceDate']} age:{row['closePriceAgeDays']}")
             except Exception as ee:
                 print(f"303 error {row['name']}")
                 print(ee)
                 print(repr(ee))
-                traceback.print_exc()
-        elif row["isin"] == isinDebug:
-            logger.fatal(f"after yahoo company: \"{row['name']}\" 5YCAGR:{row['ChPctPrice5Y']:.1f}%")
-
-        # if "VOL10DAVG" in row and "MKTCAP.USD" in row and "shrOutstanding" in row:
-        #    if row["VOL10DAVG"] is not None and row["shrOutstanding"] is not None and row["MKTCAP.USD"] is not None:
-        #        row["Vol10D.USD"] = row["VOL10DAVG"] / row["shrOutstanding"] * row["MKTCAP.USD"] / 10**6
-
+                traceback.print_exc()                    
+    
     except Exception as e:
-        print(e)
+        logger.fatal(e)
         print(repr(e))
         traceback.print_exc()
 
@@ -235,11 +240,11 @@ def assess_map(product: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def myassess(country: str, stock_list: Any, info_df: pd.DataFrame) -> pd.DataFrame:
-
     try:
         if hasattr(stock_list, "products"):
+            logger.debug(f"creating threads with {len(stock_list.products)} products to search")
             with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-                results = executor.map(assess_map, stock_list.products)
+                results = executor.map(assess_map, stock_list.products, repeat(country))
             row_df = pd.DataFrame(results)
             if info_df.shape[0] == 0:
                 info_df = row_df
@@ -373,16 +378,16 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
             # get IntAccount
             trading_api.get_client_details()
             # stocked are browsed from counties(, and not marketplaces). This is the most reliable to get all stocks
-            for li_dict in trading_api.stockCountries:
-                li = DictObj(li_dict)
-                country = trading_api.countries[li.country].name
+            for id in trading_api.countries:
+                li_dict = trading_api.countries[id]
+                country = li_dict['name']
                 if "filterCountry" in globals() and filterCountry is not None and (country not in filterCountry):
                     logger.debug(f"Skipping {country}")
                     continue
                 if i > 2 and country not in suspectCountries:
                     logger.debug(f"Looping only on suspected buggy countries, skipping {country}")
                     continue
-                suspectError, suspectCountries, info_df = access1country(li.id, country, info_df, suspectError, suspectCountries)
+                suspectError, suspectCountries, info_df = access1country(id, country, info_df, suspectError, suspectCountries)
             # end of country loop
         except Exception as e:
             print(e)

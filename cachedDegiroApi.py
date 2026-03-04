@@ -129,16 +129,178 @@ class cachedDegiroApi(CachedApi):
         if r is None or isinstance(r, str):
             r = self.__trading_api.get_products_config(**kwargs)
             self.cache_set(k, 3600 * 24, r)
+        #logger.debug(f"{r}")    
+        
         self.indices = {}
         for li in r["indices"]:
-            self.indices[li["id"]] = DictObj(li)
+            self.indices[li["id"]] = li
+        logger.debug(f"indices {self.indices}")
+            
         self.countries = {}
         for li in r["countries"]:
-            self.countries[li["id"]] = DictObj(li)
+            self.countries[li["id"]] = li
+        logger.debug(f"countries {self.countries}")
+        
         self.exchanges = {}
+        self.country2hiqAbbrs = {
+            "AE": {"ADS", "DFM", "FGM", "GAI", "GGI", "VMX"},
+            "AG": {"FTX"},
+            "AL": {"ALS", "TIR"},
+            "AM": {"ARM"},
+            "AO": {"BDV"},
+            "AR": {"A1X", "BCC", "BCM", "BUE", "CNF", "MAB", "MERVAL", "MERVAROS", "MTB", "NBCT", "ROS"},
+            "AT": {"EXAA", "OTB", "RCB", "WBAG", "WBO"},
+            "AU": {"AOM", "ASX", "FEX", "LQC", "NEC", "SFE", "YIE"},
+            "AZ": {"IBE"},
+            "BA": {"BLB", "BLSE", "SSE"},
+            "BB": {"BAB", "ISM"},
+            "BD": {"CHG", "DHA"},
+            "BE": {"ANT", "BFO", "BRU", "EQT"},
+            "BG": {"BSE", "BUL"},
+            "BH": {"BAH"},
+            "BM": {"BDA"},
+            "BO": {"BOL"},
+            "BR": {"BBF", "BMF", "BSP", "BVP", "RIO", "SOM"},
+            "BS": {"BAA"},
+            "BW": {"BOT"},
+            "CA": {"ALB", "ATS", "BBK", "CNQ", "CSE-PURE", "CXD", "ICX", "MOC", "MOD", "MOO", "NEO CONNECT", "NEO-D", "NEO-N", "NEX", "TFE", "TOE", "TSE", "TSX", "VSE"},
+            "CH": {"BRN", "ICB", "KBX", "SIX", "SWO", "SWX"},
+            "CI": {"ABJ", "BRV"},
+            "CL": {"BCL", "SGO"},
+            "CM": {"DSX"},
+            "CN": {"CFE", "CFETSBC", "DCE", "SGE", "SHE", "SHG", "SME", "ZCE"},
+            "CO": {"BOG"},
+            "CR": {"BNV"},
+            "CV": {"BVC"},
+            "CY": {"CYS", "PMX"},
+            "CZ": {"PRA", "PXE", "RMZ"},
+            "DE": {"BER", "BRE", "CEF", "DTB", "DUS", "DWZ", "ECB", "ECC", "EEE", "ETI", "ETR", "EUP", "EUR", "EUWAX", "FRA", "HAM", "HAN", "HCE", "IGG", "INV", "MUN", "RTR", "SCO", "STU", "TRADEGATE EXCHANGE", "XETRA", "XSC", "ZOBEX"},
+            "DK": {"CSE", "TRA"},
+            "DO": {"BVR", "CVD"},
+            "DZ": {"ALG"},
+            "EC": {"GUA", "QUI"},
+            "EE": {"TAL", "TAR"},
+            "EG": {"CAI"},
+            "ES": {"AIAF", "BAV", "DPA", "FCM", "MAB", "MEFF", "NAF", "SRM"},
+            "FI": {"FOM", "HEL", "NOR"},
+            "FJ": {"SPS"},
+            "FR": {"AFR", "BLN", "FMN", "MLI", "PAR", "POW", "SGA", "TPIE", "TXE"},
+            "GB": {"ALT", "AQSE", "BEM", "CGML", "COR", "EBS", "EDX", "EXDC", "EXLP", "GCL", "HPC IS", "IEL", "IPE", "JWY", "KSL", "LBM", "LCE", "LCH", "LDN", "LME", "LON", "LSE", "LTO", "MLX", "MTS", "ODM", "PEEL", "PLU", "PUK", "SGB", "SWB", "TFN", "TUP", "TXM", "UBS"},
+            "GE": {"GSE"},
+            "GG": {"CIE"},
+            "GH": {"GHA"},
+            "GR": {"ATHEXC", "ATHEXD", "ENAX", "HENEX", "HENEX S.A."},
+            "GT": {"GTG"},
+            "HK": {"CGS", "GSET", "HK GEM", "HKF", "HKG", "IHK", "PST"},
+            "HN": {"BCV", "HON"},
+            "HR": {"CRO", "OTP", "TRZ", "VAR", "ZAG"},
+            "HU": {"BCE", "BUD", "GAS"},
+            "ID": {"BBJ", "IDX", "JKT", "JNB", "SUR"},
+            "IE": {"AUCTIONS", "CDE", "DARK", "DUB", "EBI", "FNX", "ISE GEM"},
+            "IL": {"TAE"},
+            "IN": {"BAN", "BOM", "CAL", "DES", "IMC", "MDS", "NCD", "NSE", "USE"},
+            "IQ": {"IQS"},
+            "IR": {"TEH"},
+            "IS": {"ICE"},
+            "IT": {"ETFPLUS", "GME", "IDEM", "MIF", "MIL", "MOT", "MTS ITALY", "TLX"},
+            "JM": {"JAM"},
+            "JO": {"AMM", "ASE"},
+            "JP": {"CCE", "FFE", "FKA", "HER", "HIR", "IJP", "J-NET", "JAX", "JPX", "KAC", "KGT", "KKT", "KST", "KYO", "NGO", "NII", "NKS", "NST", "ODX", "OSE", "OSM", "OST", "SAP", "TFF", "TKA", "TKO", "TOCOM", "TSE", "YKT"},
+            "KE": {"NAI"},
+            "KG": {"KSE"},
+            "KH": {"CSX"},
+            "KN": {"ECS"},
+            "KR": {"KFB", "KOR", "KOSDAQ", "KRX", "KRX FM"},
+            "KW": {"KUW"},
+            "KY": {"CAY"},
+            "KZ": {"KAZ"},
+            "LA": {"LAO"},
+            "LB": {"BEY"},
+            "LI": {"LGT", "LLB", "NOM", "VPB"},
+            "LK": {"COL"},
+            "LT": {"LIT"},
+            "LU": {"LUX", "VES"},
+            "LV": {"RIS"},
+            "LY": {"LSM"},
+            "MA": {"CAS"},
+            "MD": {"MOL"},
+            "ME": {"MNX"},
+            "MG": {"MDG"},
+            "MK": {"MAE"},
+            "MN": {"ULA"},
+            "MT": {"BXE", "MAL"},
+            "MU": {"AFX", "MAU"},
+            "MW": {"MSW"},
+            "MX": {"EMD", "MEX"},
+            "MY": {"KLS", "LOF", "LOF", "RBM"},
+            "MZ": {"BVM", "MAP"},
+            "NA": {"NAM"},
+            "NG": {"NSA"},
+            "NI": {"MAN"},
+            "NL": {"ACE", "AEX", "AMS", "EMS", "FTA", "HEU", "NXC"},
+            "NO": {"ABG", "DNB", "IMA", "OSL"},
+            "NP": {"NEP"},
+            "NZ": {"AUK", "NEE", "NZE", "NZX"},
+            "OM": {"MSM", "MUS"},
+            "PA": {"PTY"},
+            "PE": {"LIM"},
+            "PG": {"POM"},
+            "PH": {"PHS"},
+            "PK": {"ISL", "KAR", "LAH"},
+            "PL": {"BRY", "GPWB", "WAR", "WSE"},
+            "PS": {"PAE"},
+            "PT": {"LIS"},
+            "PY": {"VPA"},
+            "RO": {"BRM", "BSE", "BVB", "RASDAQ", "REGF", "RPM"},
+            "RS": {"BEL"},
+            "RU": {"API", "MIC", "MOS", "PET", "PIC", "ROV", "RUS", "SAM", "SIB", "SIC", "VLA"},
+            "SA": {"SAU"},
+            "SD": {"KHA"},
+            "SE": {"ABC", "NGM", "OME", "SAT", "STO"},
+            "SG": {"ABX", "AND", "ANM", "ANS", "SES", "SGX-DT", "TPSG"},
+            "SI": {"LJS", "LJU", "SOP"},
+            "SK": {"BRA", "RMS"},
+            "SV": {"SVA"},
+            "SY": {"DSE"},
+            "SZ": {"SWA"},
+            "TH": {"BKK", "SET"},
+            "TN": {"BVMT", "TUN"},
+            "TR": {"IAB", "IST", "TUR"},
+            "TT": {"TRN"},
+            "TW": {"IME", "TAD", "TAF", "TAI"},
+            "TZ": {"DAR"},
+            "UA": {"DFB", "KHR", "KIE", "KIS", "NDU", "ODE", "PRI", "UAX", "UKR"},
+            "UG": {"UGA"},
+            "US": {"24EX", "AMEX", "AQS", "ARC", "AZX", "BATO", "BATS", "BCAP LX", "BMK", "BOX", "BRUT", "BSEF", "BTEC CHICAGO", "BTF", "BXO", "CBO", "CBOT (FLOOR)", "CBT", "CCX", "CFF", "CME", "CME (FLOOR)", "COMEX", "CRC", "CSC", "CUR", "EDGA", "EDGX", "ELX", "EUS", "FNXB", "GMX", "ICE", "IEX", "IEX DAX", "IMX", "INS", "IOM", "ISX", "KCBT", "KCGM", "KNA", "LATG", "LEVEL", "MAC", "MEMXDARK", "MER", "MGE", "MID", "NAS", "NGS", "NIM", "NQL", "NSX", "NYC", "NYF", "NYM", "NYS", "NYSE", "OCH", "OTC", "PSE", "PUS", "SEF", "TRD", "TXD", "TXSE", "US QUOTE"},
+            "UY": {"MNT"},
+            "UZ": {"CET", "CUE", "KCE", "STE", "UNI"},
+            "VN": {"STC"},
+            "ZA": {"ALTX", "ARX", "BETP", "FXM", "JSE", "SAFEX"},
+            "ZM": {"LUS"},
+            "ZW": {"ZIM"},
+        }
         for li in r["exchanges"]:
-            self.exchanges[li["id"]] = DictObj(li)
-        self.stockCountries = r["stockCountries"]
+            country = li["country"]  # country code  DE = Germany
+            hiqAbbr = li["hiqAbbr"]
+            if country not in self.country2hiqAbbrs:
+                self.country2hiqAbbrs[country] = set()
+            else:
+                self.country2hiqAbbrs[country].update({hiqAbbr})            
+            self.exchanges[li["id"]] = li
+        logger.debug(f"exchanges {self.exchanges}")
+        logger.debug(f"country2hiqAbbrs {self.country2hiqAbbrs}")
+            
+        self.stockCountries = {}
+        for li in r["stockCountries"]:
+            self.stockCountries[li["id"]] = li
+        logger.debug(f"stockCountries {self.stockCountries}")
+
+        self.eurexCountries = {}
+        for li in r["eurexCountries"]:
+            li['underlyingExchangehiqAbbrs'] = [e["hiqAbbr"] for e in li['exchanges']]
+            self.eurexCountries[li["id"]] = li
+        logger.debug(f"eurexCountries {self.eurexCountries}")
+
         return r
 
     def get_company_ratios(self, **kwargs):
