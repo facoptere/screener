@@ -614,8 +614,8 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         
         
         columns = [ 
-            "isin", "sector", "country", "name", "industry", "qscore", "qscorePerf", "EPSTRENDGR", "Focf2Rev_AAvg5",  "EnSolde2", 
-            'DCF', "L%H", 'PR13WKPCTR', "%M200D", "ChPctPrice5Y", "Rendement", "qMKTCAP.USD", "VOL10DAVG"
+            "YSymbol", "sector", "country", "name", "industry", "qscore", "qscorePerf", "EPSTRENDGR", "Focf2Rev_AAvg5",  "EnSolde2", 
+            'DCF', "L%H", 'PR13WKPCTR', "%M200D", "ChPctPrice5Y", "Rendement", "MKTCAP.USD", "VOL10DAVG"
         ]
         crit = (
             ("qscore", "QS", 80),       # score loic
