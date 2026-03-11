@@ -369,7 +369,7 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
     # this is the main dataframe that will be filled up
     info_df = pd.DataFrame()
 
-    for i in range(1, 20):
+    for i in range(1, 2):
         trading_api.connect(cookies=cookies, headers=headers)
         suspectError = 0
         try:
