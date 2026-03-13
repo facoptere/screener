@@ -1,45 +1,38 @@
-﻿isin;sector;country;name;industry;qscore;qscorePerf;EPSTRENDGR;Focf2Rev_AAvg5;EnSolde2;DCF;L%H;PR13WKPCTR;%M200D;ChPctPrice5Y;Rendement;qMKTCAP.USD;VOL10DAVG
-AT0000720008;Services;Austria (AUT);TELEKOM AUSTRIA AG;Integrated Telecommunications Services (;96;97;9,5;7,7;36;14,6;67;1,3;1;10,6;4,9;85;37850
-BE0003898187;Consumer/Non-Cyclical;Belgium (BEL);SIPEF NV;Starch, Vegetable Fat & Oil Manufacturin;97;100;54,8;11,1;38;141,5;96;0,1;15;13,0;3,0;62;3350
-BE0003602134;Capital Goods;Belgium (BEL);MOURY CONSTRUCT SA;Building Contractors;95;99;32,3;8,3;10;732,9;74;6,3;10;25,0;2,1;45;110
-BMG0450A1053;Financial;Bermuda (BMU);ARCH CAPITAL GROUP LTD;Property & Casualty Insurance (NEC);81;88;28,4;34,5;41;165,5;70;5,5;5;22,7;0,0;95;1561140
-US2044096012;Utilities;Brazil (BRA);ADR ON ENERGY OF MINAS GERAIS CO;Electric Utilities (NEC);93;97;13,0;10,5;13;2,5;73;3,2;9;24,6;10,2;85;5039900
-KYG2110P1000;Healthcare;China (CHN);CHINA SHINEWAY PHARMACEUTICAL GROUP LTD;Generic Pharmaceuticals;99;100;11,5;11,7;59;21,9;69;9,1;4;17,8;6,2;61;985400
-US31810T1016;Technology;China (CHN);ADR ON FINVOLUTION GROUP CLASS A;Financial Technology (Fintech) (NEC);94;96;3,4;9,1;62;13,7;8;4,8;-24;4,9;22,8;65;1034350
-FR0010411983;Financial;France (FRA);SCOR SE;Reinsurance (NEC);97;98;30,8;5,7;55;66,2;82;13,3;5;6,7;6,8;84;682030
-FR0000065260;Energy;France (FRA);LES DOCKS DES PETROLES D AMBES SA;Oil & Gas Transportation Services (NEC);80;81;13,7;11,5;21;1203,7;78;3,1;4;15,8;8,1;31;0
-DE000A0ETBQ4;Capital Goods;Germany (DEU);MBB SE;Business Support Services (NEC);87;83;9,3;4,9;42;342,7;78;7,6;11;10,5;1,5;64;4510
-DE000SAFH001;Consumer Cyclical;Germany (DEU);SAF-HOLLAND SE;Automotive Body Parts;82;80;55,1;5,8;15;21,0;71;22,8;12;6,4;4,3;61;93440
-MHY816691064;Transportation;Greece (GRC);STEALTHGAS INC;Oil & Gas Transportation Services (NEC);87;96;104,9;18,0;13;11,8;100;49,4;45;30,4;0,0;49;311880
-GRS536003007;Transportation;Greece (GRC);ATHENS INTERNATIONAL AIRPORT SA;Airport Operators;81;82;6,2;42,9;13;12,1;61;0,7;1;12,3;7,5;78;183120
-HK0000047982;Services;Hong Kong (HKG);EMPEROR WATCH & JEWELLERY LTD;Jewelry & Watch Retailers;100;100;23,3;13,8;75;1,4;35;36,6;2;19,3;5,4;46;13184000
-BMG6577U1062;Services;Hong Kong (HKG);LION ROCK GROUP LTD;Commercial Printing Services (NEC);100;99;9,4;6,3;63;3,6;35;0,9;-2;11,2;9,6;34;205200
-HK0639031506;Energy;Hong Kong (HKG);SHOUGANG FUSHAN RESOURCES GROUP LTD;Coke Coal Mining;95;99;7,0;19,2;51;6,5;74;13,1;7;23,3;12,8;71;12461950
-KYG9477E1070;Services;Hong Kong (HKG);WATER OASIS GROUP LTD;Personal Care Products Retailers;94;99;24,0;18,1;86;6,7;47;0,3;2;5,1;9,5;28;444600
-ID1000111602;Utilities;Indonesia (IDN);PERUSAHAAN GAS NEGARA TBK PT;Natural Gas Distribution;99;100;38,1;9,7;16;2842,6;89;45,4;32;12,9;8,0;77;56277610
-IT0003127930;Capital Goods;Italy (ITA);CALTAGIRONE SPA;Cement & Concrete Manufacturing;99;100;24,1;12,8;71;33,5;84;7,7;15;25,1;4,0;65;60630
-JP3665000000;Consumer Cyclical;Japan (JPN);NICHIRIN CO LTD;Auto, Truck & Motorcycle Parts (NEC);98;99;20,1;5,4;12;4866,6;93;6,3;15;19,0;4,8;49;23140
-JP3131000006;Capital Goods;Japan (JPN);AKATSUKI EAZIMA CO LTD;Construction & Engineering (NEC);99;98;3,7;6,0;47;7615,8;84;5,9;18;22,0;2,7;23;3040
-JP3215200001;Services;Japan (JPN);KANAMOTO CO LTD;Industrial Equipment Rental;96;96;7,2;16,6;22;5291,5;85;1,4;13;8,5;2,9;62;123420
-JP3875610002;Capital Goods;Japan (JPN);MARUZEN CO LTD;Commercial Equipment;95;93;5,8;5,1;14;4538,6;74;1,4;9;15,0;3,1;52;7070
-JP3254850005;Basic Materials;Japan (JPN);KYOWAKOGYOSYO CO LTD;Industrial Components;93;92;12,3;6,3;41;12982,9;96;2,0;12;9,8;1,7;25;600
-JP3886800006;Capital Goods;Japan (JPN);MITANI CORP;Construction Material Wholesale;93;91;16,1;4,3;16;3216,2;87;12,1;15;8,9;2,6;67;14220
-JP3829520000;Services;Japan (JPN);FRONTIER INTERNATIONAL INC;Advertising & Marketing (NEC);91;84;2,0;5,4;25;2159,6;100;25,3;32;7,0;3,0;30;21050
-LU1618151879;Services;Luxembourg (LUX);LOGWIN AG SA;Courier, Postal, Air Freight & Land-base;96;97;13,1;4,8;34;456,8;95;21,3;17;19,8;5,1;62;160
-NL0009391242;Basic Materials;Netherlands (NLD);HYDRATEC INDUSTRIES NV;Plastics;90;96;42,5;5,9;28;295,8;93;16,4;20;27,8;4,9;46;60
-PLHOGA000041;Technology;Poland (POL);WASKO SA;IT Services & Consulting (NEC);95;98;32,5;4,1;27;7,6;96;192,9;144;28,3;0,0;34;196990
-PLKNOPL00014;Services;Poland (POL);KINO POLSKA TV SA;Television Broadcasting;93;98;29,2;13,8;44;41,0;69;1,6;18;13,5;3,0;33;7870
-PLKGNRC00015;Utilities;Poland (POL);KOGENERACJA;Multiline Utilities;94;96;19,4;5,7;71;257,7;85;4,7;18;15,6;0,0;45;14970
-KYG6956A1013;Technology;Singapore (SGP);PC PARTNER GROUP LTD;Computer Hardware (NEC);100;100;89,6;32,4;72;4,4;27;18,0;13;39,8;5,3;48;3126680
-ES0112458312;Capital Goods;Spain (ESP);AZKOYEN SA;Automatic Vending Machines;97;94;3,0;5,0;23;11,7;77;2,5;3;9,2;7,6;43;10130
-GB0002090453;Consumer Cyclical;United Kingdom (GBR);COLEFAX GROUP PLC;Home Furnishings (NEC);99;100;38,3;11,7;55;24,3;82;9,1;21;20,4;0,6;27;5130
-GB0000365774;Consumer/Non-Cyclical;United Kingdom (GBR);AEP PLANTATIONS PLC;Fishing & Farming (NEC);95;100;33,3;13,6;26;21,4;96;8,1;26;21,5;2,5;59;39080
-GB0007538100;Consumer/Non-Cyclical;United Kingdom (GBR);M P EVANS GROUP PLC;Fishing & Farming (NEC);92;98;70,2;11,1;21;18,6;89;8,4;15;19,7;4,9;62;232990
-GB00BNGY4Y86;Capital Goods;United Kingdom (GBR);EPWIN GROUP LTD;Construction Supplies & Fixtures (NEC);96;96;9,1;6,9;28;1,6;96;13,2;18;13,0;4,4;41;290930
-GB0033195214;Services;United Kingdom (GBR);KINGFISHER PLC;Home Improvement Products & Services Ret;90;93;92,2;5,4;31;5,0;78;3,6;15;9,3;4,3;86;6002420
-US1280302027;Consumer/Non-Cyclical;United States (USA);CAL-MAINE FOODS INC;Poultry Farming;96;100;131,1;10,9;66;261,0;32;5,3;-3;22,8;9,8;79;818960
-US1261171003;Financial;United States (USA);CNA FINANCIAL CORP;Property & Casualty Insurance (NEC);95;96;13,1;10,6;20;60,7;83;12,2;11;10,1;4,2;90;662810
-US0200021014;Financial;United States (USA);ALLSTATE CORP;Property & Casualty Insurance (NEC);87;90;17,7;9,2;40;354,5;87;2,9;5;16,2;2,3;97;1505050
-US4108671052;Financial;United States (USA);HANOVER INSURANCE GROUP INC;Property & Casualty Insurance (NEC);87;88;13,8;11,0;44;317,0;76;0,3;3;10,1;2,2;84;247270
-KYG386441037;Services;United States (USA);GIGACLOUD TECHNOLOGY INC CLASS A;E-commerce & Auction Services;80;86;62,0;12,6;21;55,3;88;9,6;39;25,3;0,0;67;963030
-US71363P1066;Services;United States (USA);PERDOCEO EDUCATION CORP;Miscellaneous Educational Service Provid;82;84;6,8;19,7;23;44,4;74;20,9;8;25,0;1,7;71;700080
+﻿YSymbol;sector;country;name;industry;qscore;qscorePerf;EPSTRENDGR;Focf2Rev_AAvg5;EnSolde2;DCF;L%H;PR13WKPCTR;%M200D;ChPctPrice5Y;Rendement;qMKTCAP.USD;VOL10DAVG
+TKA.VI;Services;Austria (AUT);TELEKOM AUSTRIA AG;Integrated Telecommunications Services (;96;98;9,5;7,7;36;14,6;68;3,7;0;15,3;4,9;84;32130
+SIP.BR;Consumer/Non-Cyclical;Belgium (BEL);SIPEF NV;Starch, Vegetable Fat & Oil Manufacturin;97;100;54,8;11,1;38;142,7;98;5,1;17;13,5;3,0;61;3420
+ACGL;Financial;Bermuda (BMU);ARCH CAPITAL GROUP LTD;Property & Casualty Insurance (NEC);82;90;28,4;34,5;43;165,5;56;4,1;2;21,8;0,0;95;1681930
+CIG;Utilities;Brazil (BRA);ADR ON ENERGY OF MINAS GERAIS CO;Electric Utilities (NEC);93;98;13,0;10,5;12;2,5;77;14,2;10;24,0;10,2;84;7498330
+DR.TO;Healthcare;Canada (CAN);MEDICAL FACILITIES CORP;Hospitals, Clinics & Primary Care Servic;89;96;15,5;16,0;59;40,4;77;0,8;10;17,8;3,2;39;39380
+GLRE;Financial;Cayman Islands (CYM);GREENLIGHT CAPITAL RE LTD CLASS A;Property & Casualty Reinsurance;86;90;82,7;7,8;77;66,1;96;11,0;11;10,8;0,0;51;110490
+2877.HK;Healthcare;China (CHN);CHINA SHINEWAY PHARMACEUTICAL GROUP LTD;Generic Pharmaceuticals;100;100;11,5;11,7;58;22,0;77;13,0;8;18,9;6,2;60;880600
+FINV;Technology;China (CHN);ADR ON FINVOLUTION GROUP CLASS A;Financial Technology (Fintech) (NEC);94;96;3,4;9,1;62;13,7;8;3,6;-25;1,5;22,8;64;1024810
+0811.HK;Services;China (CHN);XINHUA WINSHARE PUBLISHING AND MEDIA CO ;Books, Newspapers & Magazines Wholesale;91;92;6,4;11,8;27;14,1;13;0,3;-5;15,5;0,0;70;1007710
+2600.HK;Basic Materials;China (CHN);ALUMINUM CORPORATION OF CHINA LTD;Aluminum (NEC);80;85;81,0;8,8;12;15,8;87;29,5;40;27,0;2,1;95;77745650
+DPAM.PA;Energy;France (FRA);LES DOCKS DES PETROLES D AMBES SA;Oil & Gas Transportation Services (NEC);81;84;13,7;11,5;22;1203,7;75;2,4;2;15,6;8,1;30;0
+SFQ.DE;Consumer Cyclical;Germany (DEU);SAF-HOLLAND SE;Automotive Body Parts;82;82;55,1;5,8;15;21,0;70;21,8;11;10,6;4,3;59;88320
+GASS;Transportation;Greece (GRC);STEALTHGAS INC;Oil & Gas Transportation Services (NEC);91;99;40,2;27,7;66;26,4;72;30,3;26;25,2;0,0;45;393020
+0887.HK;Services;Hong Kong (HKG);EMPEROR WATCH & JEWELLERY LTD;Jewelry & Watch Retailers;100;100;23,3;13,8;76;1,4;33;31,6;2;18,9;5,4;44;11851000
+1161.HK;Services;Hong Kong (HKG);WATER OASIS GROUP LTD;Personal Care Products Retailers;94;99;24,0;18,1;86;6,7;53;1,4;2;5,1;9,5;27;547800
+0639.HK;Energy;Hong Kong (HKG);SHOUGANG FUSHAN RESOURCES GROUP LTD;Coke Coal Mining;94;99;7,0;19,2;49;6,5;84;11,4;13;24,9;12,8;70;19193180
+1997.T;Capital Goods;Japan (JPN);AKATSUKI EAZIMA CO LTD;Construction & Engineering (NEC);99;99;3,7;6,0;46;7615,8;87;8,9;20;22,6;2,7;22;2390
+5184.T;Consumer Cyclical;Japan (JPN);NICHIRIN CO LTD;Auto, Truck & Motorcycle Parts (NEC);98;99;20,1;5,4;12;4866,6;93;6,7;16;19,2;4,8;48;22530
+8066.T;Capital Goods;Japan (JPN);MITANI CORP;Construction Material Wholesale;95;93;16,1;4,3;22;3216,2;73;3,0;11;8,2;2,6;65;14970
+6346.T;Capital Goods;Japan (JPN);KIKUKAWA ENTERPRISE INC;Industrial Machinery;95;93;9,7;5,6;16;7881,0;74;2,6;9;9,9;3,1;22;520
+5971.T;Basic Materials;Japan (JPN);KYOWAKOGYOSYO CO LTD;Industrial Components;93;93;12,3;6,3;41;12982,9;97;1,4;16;10,6;1,7;24;720
+9678.T;Services;Japan (JPN);KANAMOTO CO LTD;Industrial Equipment Rental;92;93;7,2;16,6;37;6892,2;95;8,1;18;9,6;2,9;61;163760
+5982.T;Capital Goods;Japan (JPN);MARUZEN CO LTD;Commercial Equipment;94;92;5,8;5,1;13;4538,6;78;1,3;10;15,1;3,1;51;6230
+7050.T;Services;Japan (JPN);FRONTIER INTERNATIONAL INC;Advertising & Marketing (NEC);91;85;2,0;5,4;24;2159,6;92;27,2;34;7,6;3,0;29;27380
+TGHN.DE;Services;Luxembourg (LUX);LOGWIN AG SA;Courier, Postal, Air Freight & Land-base;97;97;12,1;4,8;30;414,9;84;26,6;13;12,6;5,4;59;250
+HYDRA.AS;Basic Materials;Netherlands (NLD);HYDRATEC INDUSTRIES NV;Plastics;90;96;42,5;5,9;28;295,8;90;13,4;19;29,0;4,9;44;50
+CFX.L;Consumer Cyclical;United Kingdom (GBR);COLEFAX GROUP PLC;Home Furnishings (NEC);99;100;38,3;11,7;55;24,3;82;10,2;20;20,9;0,6;26;4030
+AEP.L;Consumer/Non-Cyclical;United Kingdom (GBR);AEP PLANTATIONS PLC;Fishing & Farming (NEC);95;100;33,3;13,6;25;21,4;96;11,8;27;21,8;2,5;57;33340
+MPE.L;Consumer/Non-Cyclical;United Kingdom (GBR);M P EVANS GROUP PLC;Fishing & Farming (NEC);92;99;70,2;11,1;19;18,6;94;14,4;17;19,3;4,9;61;227440
+;Capital Goods;United Kingdom (GBR);EPWIN GROUP LTD;Construction Supplies & Fixtures (NEC);97;98;9,1;6,9;28;1,6;96;13,2;18;13,0;4,4;39;290930
+CALM;Consumer/Non-Cyclical;United States (USA);CAL-MAINE FOODS INC;Poultry Farming;96;100;131,1;10,9;66;261,0;32;5,3;-1;22,5;9,8;78;812690
+RGA;Financial;United States (USA);REINSURANCE GROUP OF AMERICA INC;Life & Health Reinsurance;93;99;22,9;22,5;66;610,4;65;4,5;5;12,2;2,1;89;381430
+CNA;Financial;United States (USA);CNA FINANCIAL CORP;Property & Casualty Insurance (NEC);95;97;13,1;10,6;23;60,7;61;8,1;7;8,8;4,2;89;511830
+ALL;Financial;United States (USA);ALLSTATE CORP;Property & Casualty Insurance (NEC);87;90;17,7;9,2;42;354,5;71;2,5;2;15,3;2,3;97;1431920
+GCT;Services;United States (USA);GIGACLOUD TECHNOLOGY INC CLASS A;E-commerce & Auction Services;82;88;62,0;12,6;25;55,3;82;12,2;32;23,5;0,0;65;817220
+HIG;Financial;United States (USA);HARTFORD INSURANCE GROUP INC;Multiline Insurance & Brokers (NEC);80;85;22,9;16,6;31;194,1;73;2,7;3;22,1;1,9;95;1819090
+PRDO;Services;United States (USA);PERDOCEO EDUCATION CORP;Miscellaneous Educational Service Provid;81;83;6,8;19,7;21;44,4;78;25,9;11;24,4;1,7;70;624430
