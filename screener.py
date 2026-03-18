@@ -348,8 +348,11 @@ def compute(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[df["Rendement"].isna(), "Rendement"] = 0.0
     df.loc[df["YLD+PRY"].isna(), "YLD+PRY"] = 0.0
     df.loc[:, "YLD+PRY"] = df["Rendement"] + df["ChPctPrice5Y"]
-    
-    #df = df.drop("__nprice", axis=1)
+       
+    # daily traded volume in USD, 10-day average
+    df["VOL10DUSD"] = 0.0
+    df.loc[(df["MKTCAP.USD"].notna() & df["shrOutstanding"].notna() & df["VOL10DAVG"].notna() & (df["shrOutstanding"] > 0)), "VOL10DUSD"] = \
+        (df["MKTCAP.USD"] / (df["shrOutstanding"] * 10**6) * df["VOL10DAVG"]).round()
     
     return df
 
@@ -498,7 +501,7 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
         
         cols = [ "EPSTRENDGR", "Focf2Rev_AAvg5", "score", "EnSolde2", "YLD+PRY"]
         weight = [1] * len(cols)
-        weight[cols.index("score")] = len(cols)
+        weight[cols.index("score")] = len(cols) - 1
         sumweight = np.sum(weight)
         qdf = df[cols].copy()
         for c in cols:
@@ -550,17 +553,23 @@ def build_csv(df: pd.DataFrame, critMinValue, critRemoveRegex, columns, filename
         for c in critRemoveRegex:
                 column1 = c[0]
                 regex1 = c[1]
-                column2 = c[2]
-                regex2 = c[3]
-                ddf.loc[(ddf[column1].str.contains(regex1, case=False, regex=True) & ddf[column2].str.contains(regex2, case=False, regex=True)), "keep"] = 0
+                if len(c) > 2:
+                    column2 = c[2]
+                    regex2 = c[3]
+                    ddf.loc[(ddf[column1].str.contains(regex1, case=False, regex=True) & ddf[column2].str.contains(regex2, case=False, regex=True)), "keep"] = 0
+                else:
+                    ddf.loc[(ddf[column1].str.contains(regex1, case=False, regex=True)), "keep"] = 0
         ddf = ddf[ddf["keep"] == 1].sort_values(by=["country", "qscorePerf", "score"], ascending=[True, False, False])
 
     if tformat:
         ddf["name"] = ddf["name"].str.slice(0, tformat)
         ddf["industry"] = ddf["industry"].str.slice(0, tformat)
 
-    ddf = ddf[columns]
-    ddf.to_csv(filename, index=False, sep=separator, decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format=fformat, quoting=csv.QUOTE_MINIMAL)
+    if columns is not None:
+        ddf = ddf[columns]
+        
+    if filename is not None:
+        ddf.to_csv(filename, index=False, sep=separator, decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format=fformat, quoting=csv.QUOTE_MINIMAL)
     
     return ddf
 
@@ -594,7 +603,8 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             "MARGIN5YR", "Focf2Rev_AAvg5", "ratings_CURR", "ratings_1WA", "VE/EBITDA", "VE/CA", "CAPI/TANG", "PER", "Rendement", "Dette nette / EBITDA", 
             "Ratio courant", "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", 
             "EV2FCF_CurTTM", "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", 
-            "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG", "EPSTRENDGR", "EnSolde2", 'DCF', 'TTMFCFSHR', 'FOCF_AYr5CAGR', "MKTCAP.USD",
+            "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG", "EPSTRENDGR", "EnSolde2", 'DCF', 'TTMFCFSHR', 
+            'FOCF_AYr5CAGR', "MKTCAP.USD", "VOL10DUSD"
         ]
         build_csv(info_df, None, None, columns, "screener4.csv", "\t", "%.1f", 40)
         
@@ -607,7 +617,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             "Focf2Rev_AAvg5", "ratings_CURR", "ratings_1WA", "VE/EBITDA", "VE/CA", "CAPI/TANG", "PER", "Rendement", "Dette nette / EBITDA", "Ratio courant",
             "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", "EV2FCF_CurTTM",
             "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", "ChPctPrice5Y",
-            "YSymbol", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG", "EPSTRENDGR", "EnSolde2", 'DCF', 'TTMFCFSHR', 'FOCF_AYr5CAGR' 
+            "YSymbol", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG", "EPSTRENDGR", "EnSolde2", 'DCF', 'TTMFCFSHR', 'FOCF_AYr5CAGR', "MKTCAP.USD", "VOL10DUSD" 
         ]
         build_csv(info_df, None, None, columns, filename, "\t", "%.3f", 0)
         
@@ -615,19 +625,19 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         
         columns = [ 
             "YSymbol", "sector", "country", "name", "industry", "qscore", "qscorePerf", "EPSTRENDGR", "Focf2Rev_AAvg5",  "EnSolde2", 
-            'DCF', "L%H", 'PR13WKPCTR', "%M200D", "ChPctPrice5Y", "Rendement", "qMKTCAP.USD", "VOL10DAVG"
+            'DCF', "L%H", 'PR13WKPCTR', "%M200D", "ChPctPrice5Y", "Rendement", "VOL10DUSD"
         ]
         crit = (
             ("qscore", "QS", 80),       # score loic
-            ("qscorePerf", "QSP", 80),  # score loic + perf
-            #("REVPS5YGR", "REV", 3),    # croissance revenu
+            ("qscorePerf", "QSP", 90),  # score loic + perf
             ("EPSTRENDGR", "EPS", 0),   # croissance des profits nets
             ("Focf2Rev_AAvg5", "FCF", 4),    # ratio FOCF / Rev
             ("EnSolde2", "SLD",   10),   # en solde de x%   DCF FCFF (discounted cash flow from free cash flow to the firm)
             ("ChPctPrice5Y", "PRX", 0),  # croissance annuelle du prix de l'action, sans les dividendes
             ("YLD+PRY", "YLD", 10),      # rendement dividende + croissance du prix annuel
-            ("MKTCAP.USD", "MCAP", 5*1e7),  # market cap
-            ("PR13WKPCTR", "PRX3M", 0),     # croissance du prix de l'action ces 3 derniers mois
+            ("VOL10DUSD", "VOL", 10000),  # volume quotidien en dollar US
+            ("PR13WKPCTR", "PRX3M", 0),     # variation du prix de l'action ces 3 derniers mois
+            ("%M200D", "MA200", -5),     # distance par rapport à la MM 200 jours, en pct
         )
         # Removing banks, freight, holdings and mines
         critRemoveRegex = (
