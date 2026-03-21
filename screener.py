@@ -3,10 +3,11 @@ import json
 import logging
 import numpy as np
 import os
-import pandas as pd
+ 
+import polars as pl
 import sys
 import traceback
-import warnings
+ 
 from DictObj import DictObj
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -28,8 +29,6 @@ http.client.HTTPConnection.debuglevel = 5
 from cachedDegiroApi import cachedDegiroApi
 from cachedYahooApi import CachedYahooApi
 from cachedfaz import CachedFrankfurter
-
-warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 isinDebug = "JP3860220007"
 filterCountry = None
@@ -147,20 +146,20 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
             df = None
             if row["vwdId"] and len(row["vwdId"]) > 0:
                 df = trading_api.get_longtermprice(row["vwdId"], Interval.P5Y, Interval.P1W)
-            if isinstance(df, pd.DataFrame) and df.shape[0] > 0:
+            if isinstance(df, pl.DataFrame) and df.shape[0] > 0:
                 pass
             elif row["vwdIdSecondary"] and len(row["vwdIdSecondary"]) > 0:
                 df = trading_api.get_longtermprice(row["vwdIdSecondary"], Interval.P5Y, Interval.P1W)
-            if isinstance(df, pd.DataFrame) and df.shape[0] > 0:
-                LastWeekClose = df.iloc[-1]["close"]
+            if isinstance(df, pl.DataFrame) and df.shape[0] > 0:
+                LastWeekClose = df.tail(1)["close"][0]
                 if "closePriceAgeDays" in row and row['closePriceAgeDays'] < 7 and "closePrice" in row and row["closePrice"] > 0:
                     if abs(LastWeekClose-row["closePrice"])/row["closePrice"] < .30:
                         LastWeekClose = row["closePrice"]
                     else:
                         logger.warning(f"company: \"{row['name']}\" Won't update properly 'ChPctPrice5Y' since prices are too different...  LastWeekClose:{LastWeekClose}  Last close: {row['closePrice']}  last close date:{row['closePriceDate']}")
-                row["ChPctPrice5Y"] = (pow(1 + (LastWeekClose - df.iloc[0]["open"]) / df.iloc[0]["open"], 1 / (df.shape[0] / 52)) - 1) * 100
+                row["ChPctPrice5Y"] = (pow(1 + (LastWeekClose - df.head(1)["open"][0]) / df.head(1)["open"][0], 1 / (df.shape[0] / 52)) - 1) * 100
                 if df.shape[0] > 40:
-                    data = df["close"].to_numpy()[-40:]
+                    data = df["close"].to_numpy().copy()[-40:]
                     mask = np.isnan(data)
                     data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
                     row["%M200D"] = np.mean(data)
@@ -172,7 +171,7 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
                 if row["isin"] == isinDebug:
                     msg = (
                         f"company: \"{row['name']}\" 5YCAGR:{row['ChPctPrice5Y']:.1f}% nbRows:{df.shape[0]} "
-                        f"open:{df.iloc[0]['open']} close:{LastWeekClose} "
+                        f"open:{df.head(1)['open'][0]} close:{LastWeekClose} "
                         f" last close: {row['closePrice']} last close date:{row['closePriceDate']} age:{row['closePriceAgeDays']}\n"
                     )
                     print(msg, df)
@@ -202,9 +201,9 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
         if ylabel and isinstance(ylabel, str) and (np.isnan(row["ChPctPrice5Y"]) or np.isnan(row["%M200D"])):
             try:
                 df = yahoo_api.get_longtermprice(ylabel, "5y", "1wk")
-                if isinstance(df, pd.DataFrame):
+                if isinstance(df, pl.DataFrame):
                     if df.shape[0] > 1:
-                        data = df["Close"].to_numpy()
+                        data = df["Close"].to_numpy().copy()
                         mask = np.isnan(data)
                         data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
                         
@@ -239,17 +238,17 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
     return row
 
 
-def myassess(country: str, stock_list: Any, info_df: pd.DataFrame) -> pd.DataFrame:
+def myassess(country: str, stock_list: Any, info_df: pl.DataFrame) -> pl.DataFrame:
     try:
         if hasattr(stock_list, "products"):
             logger.debug(f"creating threads with {len(stock_list.products)} products to search")
             with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
                 results = executor.map(assess_map, stock_list.products, repeat(country))
-            row_df = pd.DataFrame(results)
+            row_df = pl.DataFrame(results)
             if info_df.shape[0] == 0:
                 info_df = row_df
             else:
-                info_df = pd.concat([info_df, row_df], ignore_index=True)
+                info_df = pl.concat([info_df, row_df], how="diagonal_relaxed")
         else:
             print("Stock market as no product", country)
     except Exception as e:
@@ -259,7 +258,7 @@ def myassess(country: str, stock_list: Any, info_df: pd.DataFrame) -> pd.DataFra
     return info_df
 
 
-def access1country(li_id: int, ctry: str, df: pd.DataFrame, errCounter: int, errCtry: Set[str]) -> Tuple[int, Set[str], pd.DataFrame]:
+def access1country(li_id: int, ctry: str, df: pl.DataFrame, errCounter: int, errCtry: Set[str]) -> Tuple[int, Set[str], pl.DataFrame]:
     limit = 100
     for page in range(0, 100):
         request_stock = StocksRequest(
@@ -286,10 +285,11 @@ def access1country(li_id: int, ctry: str, df: pd.DataFrame, errCounter: int, err
     return errCounter, errCtry, df
 
 
-def compute(df: pd.DataFrame) -> pd.DataFrame:
+def compute(df: pl.DataFrame) -> pl.DataFrame:
     epsilon = 10**-9
     cap = 999
 
+    # Ensure all columns exist
     for colname in [
         "businessSummary", "name", "sector", "industry", "country", "MKTCAP", "ratings_CURR", "ratings_1WA", "reportCurrency", "NPMTRENDGR", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", 
         "ChPctPrice5Y", "YSymbol", "AROE5YAVG", "closePriceDate", "Focf2Rev_AAvg5", "MARGIN5YR", "REVPS5YGR", "%M200D", "__nprice", "ACURRATIO", "AEBITD", "ANIAC", "APENORM", "AREV", 
@@ -298,66 +298,215 @@ def compute(df: pd.DataFrame) -> pd.DataFrame:
         "TTMNIAC", "TTMREV", "VE/CA", "VE/FCF", "YLD5YAVG", "EV", "TTMFCF", "VE/FCF","YLD+PRY"
     ]:
         if colname not in df.columns:
-            df[colname] = np.nan
+            df = df.with_columns(pl.lit(np.nan).alias(colname))
 
-    df.loc[df["Net Income"].isna(), "Net Income"] = df["TTMNIAC"] / 10**6
-    df.loc[df["Net Income"].isna(), "Net Income"] = df["ANIAC"] / 10**6
-    df.loc[:, "__nprice"] = df["NPRICE"]
-    df["L%H"] = -1.0
-    df.loc[(df["__nprice"] > 0) & (df["NHIG"] > df["NLOW"]), "L%H"] = (df["__nprice"] - df["NLOW"]) / (df["NHIG"] - df["NLOW"]) * 100.0
-    df["L%H"] = df["L%H"].round()
-    #df.loc[:, "%M200D"] = (df["closePrice"] - df["%M200D"]) / df["%M200D"]
-    df.loc[df["EBITDA"].isna(), "EBITDA"] = df["AEBITD"] / 10**6
-    df.loc[:, "VE/EBITDA"] = (df["EV"].clip(lower=epsilon) / df["EBITDA"].clip(lower=epsilon) / 10**6).clip(upper=cap)
-    df.loc[:, "VE/CA"] = (df["EV"].clip(lower=epsilon) / df["TTMREV"].clip(lower=epsilon)).clip(upper=cap)
-    df.loc[df["VE/CA"].isna(), "VE/CA"] = (df["EV"].clip(lower=epsilon) / df["AREV"].clip(lower=epsilon)).clip(upper=cap)
-    df.loc[:, "CAPI/TANG"] = (df["__nprice"] / df["QTANBVPS"].clip(lower=epsilon)).clip(upper=cap)
-    df.loc[df["CAPI/TANG"].isna(), "CAPI/TANG"] = (df["__nprice"] / df["ATANBVPS"].clip(lower=epsilon)).clip(upper=cap)
-    df.loc[:, "PER"] = df["PEINCLXOR"]
-    df.loc[df["PER"].isna(), "PER"] = df["APENORM"]
-    df.loc[df["PER"].isna(), "PER"] = df["ProjPE"]
-    df.loc[:, "Rendement"] = df["YLD5YAVG"]
-    df.loc[df["Rendement"].isna(), "Rendement"] = df["DivYield_CurTTM"]
-    df.loc[df["Rendement"].isna(), "Rendement"] = epsilon
-    df.loc[:, "Dette nette"] = df["NetDebt_I"]
-    df.loc[df["Dette nette"].isna(), "Dette nette"] = df["NetDebt_A"]
-    df.loc[df["EBITDA"].isna() | (df["EBITDA"] < 0), "EBITDA"] = epsilon
-    df.loc[:, "Dette nette / EBITDA"] = (df["Dette nette"] / df["EBITDA"] / 10**6).clip(upper=cap, lower=epsilon)
-    df.loc[
-        df["Dette nette / EBITDA"].isna() & (df["Dette nette"] <= 0),
-        "Dette nette / EBITDA",
-    ] = epsilon
-    df.loc[
-        df["Dette nette / EBITDA"].isna() & (df["Dette nette"] > 0),
-        "Dette nette / EBITDA",
-    ] = cap
-    df.loc[:, "Ratio courant"] = df["QCURRATIO"]
-    df.loc[df["Ratio courant"].isna(), "Ratio courant"] = df["ACURRATIO"]
-    df.loc[df["Ratio courant"].isna(), "Ratio courant"] = epsilon
-    df.loc[:, "VE/FCF"] = df["EV2FCF_CurTTM"]
-    df.loc[(df["VE/FCF"] <= 0) | df["VE/FCF"].isna(), "VE/FCF"] = epsilon
-    df.loc[:, "VE/FCF"] = df["VE/FCF"].clip(lower=epsilon, upper=cap)
-    df.loc[:, "Juste Prix"] = (df["Net Income"] * df["PER"] - df["Dette nette"] / 10**6) / df["shrOutstanding"]
-    df.loc[(df["Juste Prix"] <= 0) | (df["Juste Prix"].isna()), "Juste Prix"] = epsilon
-    df["En Solde"] = -100.0
-    df.loc[(df["Juste Prix"] != 0) & (df["Juste Prix"] > df["__nprice"]), "En Solde"] = (df["Juste Prix"] - df["__nprice"]) / df["Juste Prix"] * 100.0
-    df.loc[(df["__nprice"] != 0) & (df["Juste Prix"] <= df["__nprice"]), "En Solde"] = (df["Juste Prix"] - df["__nprice"]) / df["__nprice"] * 100.0
-    df["En Solde"] = df["En Solde"].round()
+    # Fill Net Income
+    df = df.with_columns(
+        pl.when(pl.col("Net Income").is_null() | pl.col("Net Income").is_nan())
+        .then(pl.col("TTMNIAC") / 10**6)
+        .otherwise(pl.col("Net Income"))
+        .alias("Net Income")
+    )
+    df = df.with_columns(
+        pl.when(pl.col("Net Income").is_null() | pl.col("Net Income").is_nan())
+        .then(pl.col("ANIAC") / 10**6)
+        .otherwise(pl.col("Net Income"))
+        .alias("Net Income")
+    )
     
+    df = df.with_columns(__nprice=pl.col("NPRICE"))
+    
+    # L%H calculation
+    df = df.with_columns(
+        pl.when((pl.col("__nprice") > 0) & (pl.col("NHIG") > pl.col("NLOW")))
+        .then((pl.col("__nprice") - pl.col("NLOW")) / (pl.col("NHIG") - pl.col("NLOW")) * 100.0)
+        .otherwise(-1.0)
+        .alias("L%H")
+    )
+    df = df.with_columns(pl.col("L%H").round(0))
+    
+    # Fill EBITDA
 
-    df.loc[df["Rendement"].isna(), "Rendement"] = 0.0
-    df.loc[df["YLD+PRY"].isna(), "YLD+PRY"] = 0.0
-    df.loc[:, "YLD+PRY"] = df["Rendement"] + df["ChPctPrice5Y"]
-       
-    # daily traded volume in USD, 10-day average
-    df["VOL10DUSD"] = 0.0
-    df.loc[(df["MKTCAP.USD"].notna() & df["shrOutstanding"].notna() & df["VOL10DAVG"].notna() & (df["shrOutstanding"] > 0)), "VOL10DUSD"] = \
-        (df["MKTCAP.USD"] / (df["shrOutstanding"] * 10**6) * df["VOL10DAVG"]).round()
+    df = df.with_columns(
+        pl.when(pl.col("EBITDA").is_null() | pl.col("EBITDA").is_nan())
+        .then(pl.col("AEBITD") / 10**6)
+        .otherwise(pl.col("EBITDA"))
+        .alias("EBITDA")
+    )
+    
+    df = df.with_columns(
+        pl.when((pl.col("EBITDA").is_null() | pl.col("EBITDA").is_nan()) | (pl.col("EBITDA") < 0))
+        .then(pl.lit(epsilon))
+        .otherwise(pl.col("EBITDA"))
+        .alias("EBITDA")
+    )
+      
+    # VE/EBITDA
+    df = df.with_columns(
+        (pl.col("EV").clip(lower_bound=epsilon) / pl.col("EBITDA").clip(lower_bound=epsilon) / 10**6).clip(upper_bound=cap).alias("VE/EBITDA")
+    )
+    
+    # VE/CA
+    df = df.with_columns(
+        (pl.col("EV").clip(lower_bound=epsilon) / pl.col("TTMREV").clip(lower_bound=epsilon)).clip(upper_bound=cap).alias("VE/CA")
+    )
+    df = df.with_columns(
+        pl.when(pl.col("VE/CA").is_null() | pl.col("VE/CA").is_nan())
+        .then((pl.col("EV").clip(lower_bound=epsilon) / pl.col("AREV").clip(lower_bound=epsilon)).clip(upper_bound=cap))
+        .otherwise(pl.col("VE/CA"))
+        .alias("VE/CA")
+    )
+    
+    # CAPI/TANG
+    df = df.with_columns(
+        (pl.col("__nprice") / pl.col("QTANBVPS").clip(lower_bound=epsilon)).clip(upper_bound=cap).alias("CAPI/TANG")
+    )
+    df = df.with_columns(
+        pl.when(pl.col("CAPI/TANG").is_null() | pl.col("CAPI/TANG").is_nan())
+        .then((pl.col("__nprice") / pl.col("ATANBVPS").clip(lower_bound=epsilon)).clip(upper_bound=cap))
+        .otherwise(pl.col("CAPI/TANG"))
+        .alias("CAPI/TANG")
+    )
+    
+    # PER
+    df = df.with_columns(pl.col("PEINCLXOR").alias("PER"))
+    df = df.with_columns(
+        pl.when(pl.col("PER").is_null() | pl.col("PER").is_nan())
+        .then(pl.col("APENORM"))
+        .otherwise(pl.col("PER"))
+        .alias("PER")
+    )
+    df = df.with_columns(
+        pl.when(pl.col("PER").is_null() | pl.col("PER").is_nan())
+        .then(pl.col("ProjPE"))
+        .otherwise(pl.col("PER"))
+        .alias("PER")
+    )
+    
+    # Rendement
+    df = df.with_columns(pl.col("YLD5YAVG").alias("Rendement"))
+    df = df.with_columns(
+        pl.when(pl.col("Rendement").is_null() | pl.col("Rendement").is_nan())
+        .then(pl.col("DivYield_CurTTM"))
+        .otherwise(pl.col("Rendement"))
+        .alias("Rendement")
+    )
+    df = df.with_columns(
+        pl.when(pl.col("Rendement").is_null() | pl.col("Rendement").is_nan())
+        .then(pl.lit(epsilon))
+        .otherwise(pl.col("Rendement"))
+        .alias("Rendement")
+    )
+    
+    # Dette nette
+    df = df.with_columns(pl.col("NetDebt_I").alias("Dette nette"))
+    df = df.with_columns(
+        pl.when(pl.col("Dette nette").is_null() | pl.col("Dette nette").is_nan())
+        .then(pl.col("NetDebt_A"))
+        .otherwise(pl.col("Dette nette"))
+        .alias("Dette nette")
+    )
+    
+    # Dette nette / EBITDA
+    df = df.with_columns(
+        (pl.col("Dette nette") / pl.col("EBITDA") / 10**6).clip(upper_bound=cap, lower_bound=epsilon).alias("Dette nette / EBITDA")
+    )
+    df = df.with_columns(
+        pl.when((pl.col("Dette nette / EBITDA").is_null() | pl.col("Dette nette / EBITDA").is_nan()) & (pl.col("Dette nette") <= 0))
+        .then(pl.lit(epsilon))
+        .otherwise(pl.col("Dette nette / EBITDA"))
+        .alias("Dette nette / EBITDA")
+    )
+    df = df.with_columns(
+        pl.when((pl.col("Dette nette / EBITDA").is_null() | pl.col("Dette nette / EBITDA").is_nan()) & (pl.col("Dette nette") > 0))
+        .then(pl.lit(cap))
+        .otherwise(pl.col("Dette nette / EBITDA"))
+        .alias("Dette nette / EBITDA")
+    )
+    
+    # Ratio courant
+    df = df.with_columns(pl.col("QCURRATIO").alias("Ratio courant"))
+    df = df.with_columns(
+        pl.when(pl.col("Ratio courant").is_null() | pl.col("Ratio courant").is_nan())
+        .then(pl.col("ACURRATIO"))
+        .otherwise(pl.col("Ratio courant"))
+        .alias("Ratio courant")
+    )
+    df = df.with_columns(
+        pl.when(pl.col("Ratio courant").is_null() | pl.col("Ratio courant").is_nan())
+        .then(pl.lit(epsilon))
+        .otherwise(pl.col("Ratio courant"))
+        .alias("Ratio courant")
+    )
+    
+    # VE/FCF
+    df = df.with_columns(pl.col("EV2FCF_CurTTM").alias("VE/FCF"))
+    df = df.with_columns(
+        pl.when((pl.col("VE/FCF") <= 0) | (pl.col("VE/FCF").is_null() | pl.col("VE/FCF").is_nan()))
+        .then(pl.lit(epsilon))
+        .otherwise(pl.col("VE/FCF"))
+        .alias("VE/FCF")
+    )
+    df = df.with_columns(
+        pl.col("VE/FCF").clip(lower_bound=epsilon, upper_bound=cap).alias("VE/FCF")
+    )
+    
+    # Juste Prix
+    df = df.with_columns(
+        ((pl.col("Net Income") * pl.col("PER") - pl.col("Dette nette") / 10**6) / pl.col("shrOutstanding")).alias("Juste Prix")
+    )
+    df = df.with_columns(
+        pl.when((pl.col("Juste Prix") <= 0) | (pl.col("Juste Prix").is_null() | pl.col("Juste Prix").is_nan()))
+        .then(pl.lit(epsilon))
+        .otherwise(pl.col("Juste Prix"))
+        .alias("Juste Prix")
+    )
+    
+    # En Solde
+    df = df.with_columns(
+        pl.when((pl.col("Juste Prix") != 0) & (pl.col("Juste Prix") > pl.col("__nprice")))
+        .then((pl.col("Juste Prix") - pl.col("__nprice")) / pl.col("Juste Prix") * 100.0)
+        .when((pl.col("__nprice") != 0) & (pl.col("Juste Prix") <= pl.col("__nprice")))
+        .then((pl.col("Juste Prix") - pl.col("__nprice")) / pl.col("__nprice") * 100.0)
+        .otherwise(pl.lit(-100.0))
+        .alias("En Solde")
+    )
+    df = df.with_columns(pl.col("En Solde").round(0))
+    
+    # YLD+PRY
+    df = df.with_columns(
+        pl.when(pl.col("Rendement").is_null() | pl.col("Rendement").is_nan())
+        .then(pl.lit(0.0))
+        .otherwise(pl.col("Rendement"))
+        .alias("Rendement")
+    )
+    df = df.with_columns(
+        pl.when(pl.col("YLD+PRY").is_null() | pl.col("YLD+PRY").is_nan())
+        .then(pl.lit(0.0))
+        .otherwise(pl.col("YLD+PRY"))
+        .alias("YLD+PRY")
+    )
+    df = df.with_columns(
+        (pl.col("Rendement") + pl.col("ChPctPrice5Y")).alias("YLD+PRY")
+    )
+    
+    # VOL10DUSD
+    df = df.with_columns(
+        pl.when(
+            pl.col("MKTCAP.USD").is_not_null() & pl.col("MKTCAP.USD").is_not_nan() &
+            pl.col("shrOutstanding").is_not_null() & pl.col("shrOutstanding").is_not_nan() &
+            pl.col("VOL10DAVG").is_not_null() & pl.col("VOL10DAVG").is_not_nan() &
+            (pl.col("shrOutstanding") > 0)
+        )
+        .then((pl.col("MKTCAP.USD") / (pl.col("shrOutstanding") * 10**6) * pl.col("VOL10DAVG")).round(0))
+        .otherwise(pl.lit(0.0))
+        .alias("VOL10DUSD")
+    )
     
     return df
 
 
-def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, basedir: str) -> pd.DataFrame:
+def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, basedir: str) -> pl.DataFrame:
     global trading_api
     global yahoo_api
     global forex_api
@@ -369,10 +518,10 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
     suspectError = 0
     suspectCountries = set()
 
-    # this is the main dataframe that will be filled up
-    info_df = pd.DataFrame()
+    # this is the main dataframe will be filled up
+    info_df = pl.DataFrame()
 
-    for i in range(1, 2):
+    for i in range(1, 6):
         trading_api.connect(cookies=cookies, headers=headers)
         suspectError = 0
         try:
@@ -386,6 +535,8 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
                 country = li_dict['name']
                 if "filterCountry" in globals() and filterCountry is not None and (country not in filterCountry):
                     logger.debug(f"Skipping {country}")
+                    continue
+                if country == "SB":  # fake country for non tradable assets
                     continue
                 if i > 2 and country not in suspectCountries:
                     logger.debug(f"Looping only on suspected buggy countries, skipping {country}")
@@ -407,48 +558,94 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
     del yahoo_api
 
     if info_df.shape[0] > 0:
-        info_df.reset_index()
-        info_df = info_df.sort_values(by=["name"], ascending=False).groupby(["name"]).head(1).reset_index().sort_values(by=["isin"], ascending=False).groupby(["isin"]).head(1).reset_index()
+        logger.debug(f"Number of stock entries before doublons: {info_df.shape[0]} / columns: {info_df.shape[1]}")
+        info_df = info_df.sort("name", descending=True).group_by("name", maintain_order=True).head(1).sort("isin", descending=True).group_by("isin", maintain_order=True).head(1)
+        logger.debug(f"Number of stock entries before compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
         info_df = compute(info_df)
-        logger.warning(f"Number of stock entries after compute: {info_df.shape[0]}")
+        logger.debug(f"Number of stock entries after compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
+    else:
+        info_df = pl.DataFrame()
         
     return info_df
 
 
 # DCF FCFF 
-def compute_dcf(ddf: pd.DataFrame, g: float, t: float, DCFstr: str, SalesStr: str) -> pd.DataFrame:
-    ddf['NetDebtShr'] = ddf['NetDebt_I'].fillna(ddf['NetDebt_A']) / ddf['shrOutstanding'] / 1e6
+def compute_dcf(ddf: pl.DataFrame, g: float, t: float, DCFstr: str, SalesStr: str) -> pl.DataFrame:
+    # NetDebtShr
+    ddf = ddf.with_columns(
+        (pl.col("NetDebt_I").fill_null(pl.col("NetDebt_A")).fill_nan(pl.col("NetDebt_A")) / pl.col("shrOutstanding") / 1e6).alias("NetDebtShr")
+    )
 
-    ddf['FOCF5Y'] = ddf['FOCF_AYr5CAGR'].fillna(ddf['EPSTRENDGR']).fillna(0.0)
-    ddf.loc[ddf['FOCF5Y'] > g, 'FOCF5Y'] = g
-    ddf['FOCF5Y'] = 1.0 + ddf['FOCF5Y']/100.0
+    # FOCF5Y
+    ddf = ddf.with_columns(
+        pl.col("FOCF_AYr5CAGR").fill_null(pl.col("EPSTRENDGR")).fill_nan(pl.col("EPSTRENDGR")).fill_null(0.0).fill_nan(0.0).alias("FOCF5Y")
+    )
+    ddf = ddf.with_columns(
+        pl.when(pl.col("FOCF5Y") > g)
+        .then(pl.lit(g))
+        .otherwise(pl.col("FOCF5Y"))
+        .alias("FOCF5Y")
+    )
+    ddf = ddf.with_columns(
+        (pl.lit(1.0) + pl.col("FOCF5Y") / 100.0).alias("FOCF5Y")
+    )
     
+    # Fill null values for financial columns
     for c in ['TTMFCFSHR', 'A1FCF', 'TTMDIVSHR', 'ADIVSHR']:
-        ddf.loc[ddf[c].isna(), c] = 0.0
+        ddf = ddf.with_columns(pl.col(c).fill_null(0.0).fill_nan(0.0))
         
-    ddf['tmp'] = (ddf['TTMFCFSHR'] + (ddf['A1FCF']/ddf['shrOutstanding']/ 1e6) + ddf['TTMDIVSHR'] + ddf['ADIVSHR']) / 2.0  # FCFE + Dividendes = FCFF
-    ddf[DCFstr] = ddf['tmp']
-    ddf[DCFstr] =   ddf[DCFstr] * (ddf['FOCF5Y']/(1+g)).pow(1) + \
-                    ddf[DCFstr] * (ddf['FOCF5Y']/(1+g)).pow(2) + \
-                    ddf[DCFstr] * (ddf['FOCF5Y']/(1+g)).pow(3) + \
-                    ddf[DCFstr] * (ddf['FOCF5Y']/(1+g)).pow(4) + \
-                    ddf[DCFstr] * (ddf['FOCF5Y']/(1+g)).pow(5) + \
-                    ddf[DCFstr] * (ddf['FOCF5Y']/(1+g)).pow(5)*(1+t)/(g-t) - \
-                    ddf['NetDebtShr']
-    ddf.loc[ddf[DCFstr] < 0.0, DCFstr] = 0.0
-                
-    ddf[SalesStr] = -100.0
-    ddf.loc[(ddf[DCFstr] != 0) & (ddf[DCFstr] > ddf["__nprice"]), SalesStr] = (ddf[DCFstr] - ddf["__nprice"]) / ddf[DCFstr] * 100.0
-    ddf.loc[(ddf["__nprice"] != 0) & (ddf[DCFstr] <= ddf["__nprice"]), SalesStr] = (ddf[DCFstr] - ddf["__nprice"]) / ddf["__nprice"] * 100.0
-    ddf.loc[ddf[SalesStr] < -100.0, SalesStr] = -100.0
-    ddf[SalesStr] = ddf[SalesStr].round()
+    # tmp calculation
+    ddf = ddf.with_columns(
+        ((pl.col("TTMFCFSHR") + (pl.col("A1FCF") / pl.col("shrOutstanding") / 1e6) + pl.col("TTMDIVSHR") + pl.col("ADIVSHR")) / 2.0).alias("tmp")
+    )
     
-    #ddf = ddf.drop('FOCF5Y', axis=1)
+    # DCF calculation
+    ddf = ddf.with_columns(pl.col("tmp").alias(DCFstr))
+    ddf = ddf.with_columns(
+        (
+            pl.col(DCFstr) * (pl.col("FOCF5Y") / (1 + g)).pow(1) +
+            pl.col(DCFstr) * (pl.col("FOCF5Y") / (1 + g)).pow(2) +
+            pl.col(DCFstr) * (pl.col("FOCF5Y") / (1 + g)).pow(3) +
+            pl.col(DCFstr) * (pl.col("FOCF5Y") / (1 + g)).pow(4) +
+            pl.col(DCFstr) * (pl.col("FOCF5Y") / (1 + g)).pow(5) +
+            pl.col(DCFstr) * (pl.col("FOCF5Y") / (1 + g)).pow(5) * (1 + t) / (g - t) -
+            pl.col("NetDebtShr")
+        ).alias(DCFstr)
+    )
+    ddf = ddf.with_columns(
+        pl.when(pl.col(DCFstr) < 0.0)
+        .then(pl.lit(0.0))
+        .otherwise(pl.col(DCFstr))
+        .alias(DCFstr)
+    )
+    
+    # En Solde calculation
+    ddf = ddf.with_columns(
+        pl.when((pl.col(DCFstr) != 0) & (pl.col(DCFstr) > pl.col("__nprice")))
+        .then((pl.col(DCFstr) - pl.col("__nprice")) / pl.col(DCFstr) * 100.0)
+        .otherwise(pl.lit(-100.0))
+        .alias(SalesStr)
+    )
+    
+    ddf = ddf.with_columns(   
+        pl.when((pl.col("__nprice") != 0) & (pl.col(DCFstr) <= pl.col("__nprice")))
+        .then((pl.col(DCFstr) - pl.col("__nprice")) / pl.col("__nprice") * 100.0)
+        .otherwise(SalesStr)
+        .alias(SalesStr)
+    )
+    
+    ddf = ddf.with_columns(
+        pl.when(pl.col(SalesStr) < -100.0)
+        .then(pl.lit(-100.0))
+        .otherwise(pl.col(SalesStr))
+        .alias(SalesStr)
+    )
+    ddf = ddf.with_columns(pl.col(SalesStr).round(0)).drop('tmp')
     
     return ddf
 
 
-def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> Optional[pd.DataFrame]:
+def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> pl.DataFrame:
     global isinDebug
     global filterCountry
 
@@ -489,49 +686,69 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
     info_df = getAll(cookies, headers, credentials, basedir)
 
     if info_df.shape[0] > 0:
+        # Convert to polars for compute_rank
         df = compute_rank(info_df, "score", ranking)
+        logger.debug(f"Number of stock entries after ranking: {df.shape[0]} / columns: {df.shape[1]}")
         df = compute_dcf(df, g=13.0/100.0, t=4.5/100.0, DCFstr="DCF", SalesStr="EnSolde2")
-        cols = ["score", "MKTCAP.USD"]
-        Q = df[cols].quantile(
-            numeric_only=True, q=list(np.arange(0.0, 1.01, 0.01).astype(float))
-        )
-        for c in cols:
-            QQ = Q[c].to_numpy()
-            df[f"q{c}"] = df.apply(lambda x: np.argmin(QQ < x[c]).astype(int), axis=1)   
+        logger.debug(f"Number of stock entries after DCF: {df.shape[0]} / columns: {df.shape[1]}")
         
-        cols = [ "EPSTRENDGR", "Focf2Rev_AAvg5", "score", "EnSolde2", "YLD+PRY"]
+        # Quantile calculations for score and MKTCAP.USD
+        cols = ["score", "MKTCAP.USD"]
+        Q_dict = {}
+        for c in cols:
+            Q_dict[c] = [df[c].quantile(q) for q in np.arange(0.0, 1.01, 0.01)]
+        Q = pl.DataFrame(Q_dict)
+        for c in cols:
+            QQ = np.array(Q[c])
+            df = df.with_columns(
+                pl.col(c).map_elements(lambda x: int(np.argmin(QQ < x)), return_dtype=pl.Int64).alias(f"q{c}")
+            )
+        
+        # Quantile calculations for score columns
+        cols = ["EPSTRENDGR", "Focf2Rev_AAvg5", "score", "EnSolde2", "YLD+PRY"]
         weight = [1] * len(cols)
         weight[cols.index("score")] = len(cols) - 1
         sumweight = np.sum(weight)
-        qdf = df[cols].copy()
+        
+        # Fill nulls with 0
         for c in cols:
-            qdf.loc[qdf[c].isna() | qdf[c].isnull(), c] = 0.0
+            df = df.with_columns(pl.col(c).fill_null(0.0))
             
-        Q = qdf[cols].quantile(
-            numeric_only=True, q=list(np.arange(0.0, 1.01, 0.01).astype(float))
-        )
+        # Quantile calculations for score columns
+        Q_dict = {}
+        for c in cols:
+            Q_dict[c] = [df[c].quantile(q) for q in np.arange(0.0, 1.01, 0.01)]
+        Q = pl.DataFrame(Q_dict)
 
+        qdf = df.select(cols).clone()
         for c in cols:
             qc = f"q{c}"
-            QQ = Q[c].to_numpy()
+            QQ = np.array(Q[c])
             QQ[1] = QQ[50]  # 'qc' column will get a 1 when 'c' below percentile [], and so won't contribute to scorePerf
             QQ[0] = QQ[20]  # 'qc' column will get a 0 when 'c' below percentile [], and so the final scorePerf =0
-            qdf[qc] = qdf.apply(lambda x: np.argmin(QQ < x[c]).astype(int)/10.0, axis=1)    
+            qdf = qdf.with_columns(
+                pl.col(c).map_elements(lambda x: np.argmin(QQ < x)/10.0, return_dtype=pl.Float64).alias(qc)
+            )
             
-        qdf["scorePerf"] = 100.0
+        qdf = qdf.with_columns(pl.lit(100.0).alias("scorePerf"))
         
         for i, c in enumerate(cols):
             qc = f"q{c}"
-            qdf.loc[qdf[qc].notna(), "scorePerf"] *= qdf[qc] ** (2.0 * weight[i])
+            qdf = qdf.with_columns(
+                (pl.col("scorePerf") * (pl.col(qc).fill_null(1.0) ** (2.0 * weight[i]))).alias("scorePerf")
+            )
         
-        Q = qdf[qdf["scorePerf"] > 0][["scorePerf"]].quantile(
-            numeric_only=True, q=list(np.arange(0.0, 1.01, 0.01).astype(float))
-        )
-        QQ = Q["scorePerf"].to_numpy()
-        df["qscorePerf"] = qdf.apply(lambda x: np.argmin(QQ < x["scorePerf"]).astype(int), axis=1) 
-        df["scorePerf"] = qdf["scorePerf"].pow(1.0 / (2.0 * sumweight))
-        
-        df = df.convert_dtypes()
+        # Quantile for scorePerf
+        qdf_filtered = qdf.filter(pl.col("scorePerf") > 0)
+        if qdf_filtered.shape[0] > 0:
+            Q = [qdf_filtered["scorePerf"].quantile(q) for q in np.arange(0.0, 1.01, 0.01)]
+        else:
+            Q = [0.0] * 101
+        QQ = np.array(Q)
+        df = df.with_columns(
+            qdf["scorePerf"].map_elements(lambda x: int(np.argmin(QQ < x)), return_dtype=pl.Int64).alias("qscorePerf"),
+            qdf["scorePerf"].pow(1.0 / (2.0 * sumweight)).alias("scorePerf")
+        )#.drop("scorePerf").rename({"tmpscorePerf": "scorePerf", })
 
         return df
     else:
@@ -539,37 +756,53 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
         return None
 
 
-def build_csv(df: pd.DataFrame, critMinValue, critRemoveRegex, columns, filename, separator, fformat, tformat) -> pd.DataFrame:
-    ddf = df.copy()
+def build_csv(df: pl.DataFrame, critMinValue, critRemoveRegex, columns, filename, separator, fformat, tformat) -> pl.DataFrame:
+    ddf = df.clone()
 
     if critMinValue:
         for c in critMinValue:
-                column = c[0]
-                valuemin = c[2]
-                ddf = ddf[ddf[column] >= valuemin]
+            column = c[0]
+            valuemin = c[2]
+            if column in ddf.columns:
+                ddf = ddf.filter(pl.col(column) >= valuemin)
 
     if critRemoveRegex:
-        ddf["keep"] = 1
+        ddf = ddf.with_columns(pl.lit(1).alias("keep"))
         for c in critRemoveRegex:
-                column1 = c[0]
-                regex1 = c[1]
-                if len(c) > 2:
-                    column2 = c[2]
-                    regex2 = c[3]
-                    ddf.loc[(ddf[column1].str.contains(regex1, case=False, regex=True) & ddf[column2].str.contains(regex2, case=False, regex=True)), "keep"] = 0
-                else:
-                    ddf.loc[(ddf[column1].str.contains(regex1, case=False, regex=True)), "keep"] = 0
-        ddf = ddf[ddf["keep"] == 1].sort_values(by=["country", "qscorePerf", "score"], ascending=[True, False, False])
+            column1 = c[0]
+            regex1 = c[1]
+            if len(c) > 2:
+                column2 = c[2]
+                regex2 = c[3]
+                ddf = ddf.with_columns(
+                    pl.when(pl.col(column1).str.contains(regex1, literal=False) & pl.col(column2).str.contains(regex2, literal=False))
+                    .then(pl.lit(0))
+                    .otherwise(pl.col("keep"))
+                    .alias("keep")
+                )
+            else:
+                ddf = ddf.with_columns(
+                    pl.when(pl.col(column1).str.contains(regex1, literal=False))
+                    .then(pl.lit(0))
+                    .otherwise(pl.col("keep"))
+                    .alias("keep")
+                )
+        ddf = ddf.filter(pl.col("keep") == 1).sort(["country", "qscorePerf", "score"], descending=[False, True, True])
 
     if tformat:
-        ddf["name"] = ddf["name"].str.slice(0, tformat)
-        ddf["industry"] = ddf["industry"].str.slice(0, tformat)
+        ddf = ddf.with_columns(
+            pl.col("name").str.slice(0, tformat),
+            pl.col("industry").str.slice(0, tformat)
+        )
 
     if columns is not None:
-        ddf = ddf[columns]
+        columnstmp = list(set(columns) & set(ddf.columns))
+        ddf = ddf.select(columnstmp)
         
     if filename is not None:
-        ddf.to_csv(filename, index=False, sep=separator, decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format=fformat, quoting=csv.QUOTE_MINIMAL)
+        # Convert to pandas for CSV writing with locale support
+        pdf = ddf.to_pandas()[columns]
+        pdf.to_csv(filename, index=False, sep=separator, decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format=fformat, quoting=csv.QUOTE_MINIMAL)
     
     return ddf
 
@@ -591,10 +824,10 @@ def push_telegram(token, chat, init_msg, crit, filename):
         )
         
         
-def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> Optional[pd.DataFrame]:
+def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> Optional[pl.DataFrame]:
     info_df = Screener(cookies, headers, _isinDebug, _filterCountry)
     if info_df is not None:
-        info_df = info_df.sort_values(by=["country", "qscorePerf", "score"], ascending=[True, False, False])
+        info_df = info_df.sort(["country", "qscorePerf", "score"], descending=[False, True, True])
         
         locale.setlocale(locale.LC_NUMERIC, os.getenv("LANG", "C"))
         
@@ -607,21 +840,9 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             'FOCF_AYr5CAGR', "MKTCAP.USD", "VOL10DUSD"
         ]
         build_csv(info_df, None, None, columns, "screener4.csv", "\t", "%.1f", 40)
-        
-        
-        
  
         filename = f"screener-{datetime.now().strftime('%y-%m-%W')}.csv"
-        columns = [
-            "symbol", "isin", "name", "sector", "industry", "country",  "qscore",  "qscorePerf", "MKTCAP", "REVPS5YGR", "MARGIN5YR",
-            "Focf2Rev_AAvg5", "ratings_CURR", "ratings_1WA", "VE/EBITDA", "VE/CA", "CAPI/TANG", "PER", "Rendement", "Dette nette / EBITDA", "Ratio courant",
-            "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", "EV2FCF_CurTTM",
-            "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", "ChPctPrice5Y",
-            "YSymbol", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG", "EPSTRENDGR", "EnSolde2", 'DCF', 'TTMFCFSHR', 'FOCF_AYr5CAGR', "MKTCAP.USD", "VOL10DUSD" 
-        ]
-        build_csv(info_df, None, None, columns, filename, "\t", "%.3f", 0)
-        
-        
+        build_csv(info_df, None, None, info_df.columns, filename, "\t", "%.3f", 0)
         
         columns = [ 
             "YSymbol", "sector", "country", "name", "industry", "qscore", "qscorePerf", "EPSTRENDGR", "Focf2Rev_AAvg5",  "EnSolde2", 
@@ -641,14 +862,13 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         )
         # Removing banks, freight, holdings and mines
         critRemoveRegex = (
-            ("sector", "Financial", "industry", "(?:bank|investment|Financial)"),
-            ("sector", "Basic Materials", "industry", "Mining"),
-            ("sector", "Transportation", "industry", "(?:Freight|Tankers)"),
-            ("name", "holding", "name", "holding"),
+            ("sector", r"(?i)Financial", "industry", r"(?i)bank|investment|Financial"),
+            ("sector", r"(?i)Basic Materials", "industry", r"(?i)Mining"),
+            ("sector", r"(?i)Transportation", "industry", r"(?i)Freight|Tankers"),
+            ("name", r"(?i)holding"),
         )
+        
         ddf = build_csv(info_df, crit, critRemoveRegex, columns, "extrait.csv", ";", "%.1f", 40)
-        
-        
         
         uch = "\u2571"
         daat = f"%Y{uch}%m{uch}%d"

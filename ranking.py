@@ -1,6 +1,7 @@
 from scipy.interpolate import interp1d
 import traceback
-
+import polars as pl
+import numpy as np
 
 def var2rank(X, Y, x):
     r = 1  # default return if x is nan
@@ -21,11 +22,32 @@ def var2quant2(x, Q, name):
     return newx
 
 
-def compute_rank(df, colname, ranking):
-    df.loc[:, colname] = 1**-10
-    # df[colname].astype(float)
+def compute_rank(df: pl.DataFrame, colname, ranking) -> pl.DataFrame:
+    df = df.with_columns(pl.lit(1**-10).alias(colname))
+    
     for key in ranking.keys():
-        df.loc[:, colname] *= df.apply(lambda x: var2quant2(x, ranking, key), axis=1)
+        r = ranking[key]
+        X = r[0]
+        Y = r[1]
+        power = r[2]
+        
+        # Use map_batches to apply interpolation on entire column
+        def interpolate_col(s):
+            result = []
+            for val in s:
+                try:
+                    if val is not None and not np.isnan(val):
+                        y_interp = interp1d(x=X, y=Y, fill_value=(Y[0], Y[-1]), bounds_error=False)
+                        result.append(float(y_interp(val)) ** power)
+                    else:
+                        result.append(1.0)
+                except:
+                    result.append(1.0)
+            return pl.Series(result)
+        
+        df = df.with_columns(
+            (pl.col(colname) * pl.col(key).map_batches(interpolate_col)).alias(colname)
+        )
     return df
 
 

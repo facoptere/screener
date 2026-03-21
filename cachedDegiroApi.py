@@ -7,6 +7,7 @@ from degiro_connector.quotecast.api import API as QuotecastAPI
 from degiro_connector.quotecast.tools.chart_fetcher import ChartFetcher
 from degiro_connector.quotecast.models.chart import ChartRequest
 import pandas as pd
+import polars as pl
 import numpy as np
 from DictObj import DictObj
 from cachedApi import CachedApi
@@ -504,8 +505,8 @@ class cachedDegiroApi(CachedApi):
 
         if isinstance(r, dict):
             try:
-                r = pd.DataFrame(r["series"][0]["data"], columns=["timestamp", "open", "high", "low", "close"])
-                if r.shape[0] == 0:
+                r = pl.DataFrame(r["series"][0]["data"], orient="row", schema=["timestamp", "open", "high", "low", "close"])
+                if len(r) == 0:
                     r = None
             except Exception as ee:
                 logger.debug(repr(ee))
