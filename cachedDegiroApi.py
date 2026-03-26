@@ -373,47 +373,43 @@ class cachedDegiroApi(CachedApi):
 
     def get_financial_statements(self, **kwargs):
         k = "get_financial_statements" + str(kwargs)
-        logger.debug(f"{k}")
-        r = self.cache_get(k, 3600 * 24 * 7)
-        # logger.debug(f"{k} {type(r)}")
-        if r is None or isinstance(r, str):
-            r = self.__trading_api.get_financial_statements(**kwargs)
-            self.cache_set(k, 3600 * 24 * 7, r)
-        codes_array = []
-        if r:
-            try:
-                for t in ("annual", "interim"):
-                    if t in r["data"]:
-                        for an in r["data"][t]:
-                            """
-                            endDate = datetime.strptime(
-                                an.get("endDate"), "%Y-%m-%d"
-                            )  # T%H:%M:%S')
-                            fiscalYear = an.get("fiscalYear")
-                            periodNumber = an.get("periodNumber") or "Y"
-                            """
-                            codes = {}
-                            for st in an["statements"]:
-                                # periodLength = st.get("periodLength")
-                                # periodType = st.get("periodType")
-                                for i in st["items"]:
-                                    v = i.get("value") or np.nan
-                                    if not pd.isna(v):
-                                        v = float(v)
+        rrr = None
+        try:
+            rrr = self.cache_get(k, 3600 * 24 * 7)
+        except:
+            rrr = None
+            
+        if rrr is None or isinstance(rrr, str):
+            rrr = self.__trading_api.get_financial_statements(**kwargs)
+            self.cache_set(k, 3600 * 24 * 7, rrr)
+        
+        fs = {}
+        fs_explain = {}
+        try:
+            if rrr:
+                for t in ("annual",):  # , "interim"
+                    if t in rrr.get("data", []):
+                        for an in rrr["data"][t]:
+                            fiscalYear = an.get("fiscalYear", "?")
+                            for st in an.get("statements", []):
+                                typ = st.get("type", "?")
+                                for i in st.get("items", []):
+                                    code = i.get("code")
+                                    try:
+                                        value = float(i.get("value", '-100000000000000'))
+                                    except:
+                                        value = 0.0
                                     # if not i.get("meaning").__contains__(" per "):
                                     #    v = v * 1  # 000000
-                                    codes[i.get("code")] = {
-                                        "meaning": i.get("meaning"),
-                                        "value": v,
-                                    }
-                            codes_array += [codes]
-            except BaseException:
-                # print(k)
-                # traceback.print_exc()
-                # del self.cache_get(k)
-                pass
-        return codes_array
+                                    fs[f"Y{fiscalYear}/{typ}/{code}"] = value
+                                    fs_explain[f"Y{fiscalYear}/{typ}/{code}"] = i.get("meaning")                                   
+        except Exception as e:
+            logger.fatal(e)
+            print(repr(e))
 
+        return fs, fs_explain
+         
+        
     def get_estimates_summaries(self, **kwargs):
         k = "get_estimates_summaries_" + str(kwargs)
         logger.debug(f"{k}")

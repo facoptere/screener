@@ -1,9 +1,10 @@
 import csv
+from errno import EBUSY
 import json
 import logging
 import numpy as np
 import os
- 
+import re
 import polars as pl
 import sys
 import traceback
@@ -22,10 +23,10 @@ from xvfb import openWindow
 import locale
 from itertools import repeat
 
-"""
+'''
 import http.client
 http.client.HTTPConnection.debuglevel = 5
-"""
+'''
 from cachedDegiroApi import cachedDegiroApi
 from cachedYahooApi import CachedYahooApi
 from cachedfaz import CachedFrankfurter
@@ -71,6 +72,8 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
         company_profile = None
         try:
             company_profile = trading_api.get_company_profile(product_isin=p.isin, raw=True)
+            if "isinDebug" in globals() and row["isin"] == isinDebug:
+                logger.fatal(f"company profile: {str(company_profile)}")
         except BaseException:
             pass
         if company_profile is None:
@@ -80,6 +83,8 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
         est_summary = None
         try:
             est_summary = trading_api.get_estimates_summaries(product_isin=p.isin, raw=True)
+            if "isinDebug" in globals() and row["isin"] == isinDebug:
+                logger.fatal(f"estimates summary: {str(est_summary)}")
         except BaseException:
             pass
         if est_summary is None:
@@ -90,13 +95,31 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
         company_ratios = None
         try:
             company_ratios = trading_api.get_company_ratios(product_isin=p.isin, raw=True)
+            if "isinDebug" in globals() and row["isin"] == isinDebug:
+                logger.fatal(f"company ratios: {str(company_ratios)}")        
         except BaseException:
             pass
         if company_ratios is None:
             company_ratios = {}
+            
+        financial_statements = None
+        try:
+            financial_statements, _ = trading_api.get_financial_statements(product_isin=p.isin, raw=True)
+            if "isinDebug" in globals() and row["isin"] == isinDebug:
+                logger.fatal(f"financial statements: {str(financial_statements)}")        
+        except Exception as eee:
+            print(f"286 error {row['name']}")
+            print(eee)
+            print(repr(eee))
+            traceback.print_exc()
+        if financial_statements is None:
+            financial_statements = {}
 
-        row = {**row, **company_profile, **company_ratios, **est_summary}
-
+        try:
+            row = {**row, **company_profile, **company_ratios, **est_summary, **financial_statements}
+        except BaseException:
+            logger.fatal(f"row:{type(row)}, company_profile:{type(company_profile)}, company_ratios:{type(company_ratios)}, est_summary:{type(est_summary)}, ")
+                        
         if "isinDebug" in globals() and row["isin"] == isinDebug:
             logger.fatal(f"row: {str(row)}")
 
@@ -502,7 +525,7 @@ def compute(df: pl.DataFrame) -> pl.DataFrame:
         .otherwise(pl.lit(0.0))
         .alias("VOL10DUSD")
     )
-    
+  
     return df
 
 
@@ -558,11 +581,11 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
     del yahoo_api
 
     if info_df.shape[0] > 0:
-        logger.debug(f"Number of stock entries before doublons: {info_df.shape[0]} / columns: {info_df.shape[1]}")
+        logger.warning(f"Number of stock entries before doublons: {info_df.shape[0]} / columns: {info_df.shape[1]}")
         info_df = info_df.sort("name", descending=True).group_by("name", maintain_order=True).head(1).sort("isin", descending=True).group_by("isin", maintain_order=True).head(1)
-        logger.debug(f"Number of stock entries before compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
+        logger.warning(f"Number of stock entries before compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
         info_df = compute(info_df)
-        logger.debug(f"Number of stock entries after compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
+        logger.warning(f"Number of stock entries after compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
     else:
         info_df = pl.DataFrame()
         
@@ -570,7 +593,130 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
 
 
 # DCF FCFF 
-def compute_dcf(ddf: pl.DataFrame, g: float, t: float, DCFstr: str, SalesStr: str) -> pl.DataFrame:
+def compute_dcf(ddf: pl.DataFrame, DCFstr: str, SalesStr: str) -> pl.DataFrame:
+    wacc_map = {
+        # Tes 12 originaux
+        "oilgas":  0.085,     # Energy/Oil
+        "finance": 0.095,     # PE/Asset mgmt
+        "retail":  0.105,     # Supermarkets
+        "IT":      0.120,     # Software/IT
+        "telecom": 0.115,     # Networking/Semi
+        "biotech": 0.140,     # Healthcare R&D
+        "REIT":    0.090,     # Retail Real Estate (bas risque locatif)
+        "utilities": 0.075,    # Stable, reglementé
+        "bank":    0.088,     # Bank-specific (bas β)
+        "Default": 0.105,     # Moyenne
+    }
+
+    g_map = {
+        "oilgas":    10.0, 
+        "finance": 6.0, 
+        "retail": 5.0, 
+        "IT": 13.0, 
+        "telecom": 10.0,
+        "biotech":  18.0, 
+        "REIT":     3.5,   # Croissance loyers faible
+        "utilities": 3.0,    # Reglementé
+        "bank":     4.5,   # Croissance actifs
+        "Default": 6.0,
+        }
+
+    t_map = {
+        "oilgas": 0.020, 
+        "finance": 0.020, 
+        "retail": 0.020, 
+        "IT": 0.025, 
+        "telecom": 0.025,
+        "biotech": 0.025, 
+        "REIT": 0.018,     # Inflation loyers
+        "utilities": 0.015,  # Très stable
+        "bank": 0.020,
+        "Default": 0.020,
+        }
+    
+    if "SctRoic" not in ddf.columns:
+        ddf = ddf.with_columns(pl.lit("Default").alias("SctRoic"))
+                               
+    ddf = ddf.with_columns([
+        pl.col("SctRoic").replace(wacc_map, default=wacc_map["Default"], return_dtype=pl.Float64).alias("wacc"),  # Par ligne
+        pl.col("SctRoic").replace(g_map, default=g_map["Default"], return_dtype=pl.Float64).alias("g"),
+        pl.col("SctRoic").replace(t_map, default=t_map["Default"], return_dtype=pl.Float64).alias("t")
+    ])
+
+    # NetDebtShr
+    ddf = ddf.with_columns(
+        (pl.col("NetDebt_I").fill_null(pl.col("NetDebt_A")).fill_nan(pl.col("NetDebt_A")).fill_nan(0.0) / pl.col("shrOutstanding") / 1e6).alias("NetDebtShr")
+    )
+
+    # FOCF5Y
+    ddf = ddf.with_columns(
+        pl.col("FOCF_AYr5CAGR").fill_null(pl.col("EPSTRENDGR")).fill_nan(pl.col("EPSTRENDGR")).fill_null(0.0).fill_nan(0.0).alias("FOCF5Y")
+    )
+
+
+    ddf = ddf.with_columns(
+        pl.when(pl.col.FOCF5Y > pl.col.g)
+        .then(pl.col.g)
+        .otherwise(pl.col.FOCF5Y)
+        .alias("FOCF5Yend")
+    )
+    ddf = ddf.with_columns(
+        (pl.lit(1.0) + pl.col("FOCF5Y") / 100.0).alias("FOCF5Y"),
+        (pl.lit(1.0) + pl.col("FOCF5Yend") / 100.0).alias("FOCF5Yend")
+    )
+
+    # Fill null values for financial columns
+    for c in ['TTMFCFSHR', 'A1FCF', 'TTMDIVSHR', 'ADIVSHR']:
+        ddf = ddf.with_columns(pl.col(c).fill_null(0.0).fill_nan(0.0))
+        
+    # fcff0 calculation
+    ddf = ddf.with_columns(
+        ((pl.col("TTMFCFSHR") + (pl.col("A1FCF") / pl.col("shrOutstanding") / 1e6) + pl.col("TTMDIVSHR") + pl.col("ADIVSHR")) / 2.0).clip(0).alias("fcff0")
+    )
+
+    for y in range(1, 6):
+        ddf = ddf.with_columns(
+            (pl.col.fcff0 * ((pl.col.FOCF5Y*(5-y)+pl.col.FOCF5Yend*(y-1))/4).pow(y) / (pl.lit(1.0)+pl.col.wacc).pow(y)).alias(f"pv{y}")
+        )
+    # TV année 5 (FCF6 / (wacc-t)), PV à t=0
+    ddf = ddf.with_columns(
+        (pl.col.fcff0 * pl.col.FOCF5Yend.pow(5) * (1 + pl.col.t) / (pl.col.wacc - pl.col.t) / (pl.lit(1.0) + pl.col.wacc).pow(5)).alias("pv6")
+    )
+    # Enterprise Value / shr - NetDebt = Equity Value
+    ddf = ddf.with_columns(
+        (pl.sum_horizontal([f"pv{i}" for i in range(1, 7)]) - pl.col("NetDebtShr")).alias(DCFstr)
+    ).with_columns(pl.when(pl.col(DCFstr) < 0).then(0).otherwise(pl.col(DCFstr)).alias(DCFstr))
+
+    
+    # En Solde calculation
+    ddf = ddf.with_columns(
+        pl.when((pl.col(DCFstr) != 0) & (pl.col(DCFstr) > pl.col("__nprice")))
+        .then((pl.col(DCFstr) - pl.col("__nprice")) / pl.col(DCFstr) * 100.0)
+        .otherwise(pl.lit(-100.0))
+        .alias(SalesStr)
+    )
+    
+    ddf = ddf.with_columns(   
+        pl.when((pl.col("__nprice") != 0) & (pl.col(DCFstr) <= pl.col("__nprice")))
+        .then((pl.col(DCFstr) - pl.col("__nprice")) / pl.col("__nprice") * 100.0)
+        .otherwise(SalesStr)
+        .alias(SalesStr)
+    )
+    
+    ddf = ddf.with_columns(
+        pl.when(pl.col(SalesStr) < -100.0)
+        .then(pl.lit(-100.0))
+        .otherwise(pl.col(SalesStr))
+        .alias(SalesStr)
+    )
+    ddf = ddf.with_columns(pl.col(SalesStr).round(0)).drop(["FOCF5Y", "FOCF5Yend", "fcff0", "pv1", "pv2", "pv3", "pv4", "pv5", "pv6"], strict=False)
+    
+    return ddf
+
+
+
+# DCF FCFF 
+def compute_dcfold(ddf: pl.DataFrame, g: float, t: float, DCFstr: str, SalesStr: str) -> pl.DataFrame:
     # NetDebtShr
     ddf = ddf.with_columns(
         (pl.col("NetDebt_I").fill_null(pl.col("NetDebt_A")).fill_nan(pl.col("NetDebt_A")) / pl.col("shrOutstanding") / 1e6).alias("NetDebtShr")
@@ -645,6 +791,117 @@ def compute_dcf(ddf: pl.DataFrame, g: float, t: float, DCFstr: str, SalesStr: st
     return ddf
 
 
+# compute most recent ROIC according to 12 sector/industries
+def compute_roic(ddf: pl.DataFrame, roicStr="roic") -> pl.DataFrame:
+
+    # Extract the current year
+    now = datetime.now()
+    current_year = now.year
+
+    # reset ROIC
+    ddf = ddf.with_columns(
+        pl.lit(None, dtype=pl.Float64).alias(roicStr)
+    )
+    
+    # set to zero unknown columns
+    pattern = re.compile(r'^Y.*/')
+    filtered_list = [s for s in ddf.columns if pattern.match(s)]
+    for col in filtered_list:
+        ddf = ddf.with_columns(pl.col(col).fill_null(strategy="zero"))
+    
+    # compute most recent ROIC
+    for y in [current_year, current_year - 1, current_year - 2]:
+        ebit_str = f"Y{y}/INC/SOPI"
+        if ebit_str in ddf.columns:
+            ddf = ddf.with_columns(
+                (pl.col(f"Y{y}/INC/SOPI") * (pl.lit(1.0) - (pl.col(f"Y{y}/INC/TTAX") / pl.col(f"Y{y}/INC/EIBT")))).alias('nopat'),
+                (pl.col(f"Y{y}/INC/SOPI")).alias('sopi'),
+                (pl.col(f"Y{y}/BAL/ATOT")).alias('atot'),
+                (pl.col(f"Y{y}/BAL/SINV")).alias('sinv'),
+                (pl.col(f"Y{y}/BAL/ATRC") + pl.col(f"Y{y}/BAL/AACR") + pl.col(f"Y{y}/BAL/AITL") - pl.col(f"Y{y}/BAL/LAPB") - pl.col(f"Y{y}/BAL/LAEX")).alias("NWC"),
+                (pl.col(f"Y{y}/BAL/LCLO") + pl.col(f"Y{y}/BAL/STLD") + pl.col(f"Y{y}/BAL/LTTD") - pl.col(f"Y{y}/BAL/SCSI")).alias("NetDebtOp")
+            )    
+
+            ddf = ddf.with_columns(
+                pl.when((pl.col.NetDebtOp < 0.0))
+                .then(pl.lit(0.0))
+                .otherwise(pl.col.NetDebtOp)
+                .alias('NetDebtOp')
+            )
+                    
+            ddf = ddf.with_columns(
+                pl.when(pl.col.industry.str.contains(r"(?i)\bbanks?\b", literal=False))
+                .then(pl.lit("bank"))
+                .when((pl.col.sector.str.contains(r"(?i)technology|services", literal=False)) & (pl.col.industry.str.contains(r"(?i)\bsoftwares?\b|\bIT\b|Semiconductors?|Online", literal=False)))
+                .then(pl.lit("IT"))
+                .when((pl.col.sector == "Healthcare") & (pl.col.industry.str.contains(r"(?i)bio|pharma", literal=False)))
+                .then(pl.lit("biotech"))
+                .when((pl.col.industry.str.contains(r"(?i)\bREITs?\b|\breal estates?\b", literal=False)))
+                .then(pl.lit("REIT"))
+                .when((pl.col.industry.str.contains(r"(?i)telecom", literal=False)))
+                .then(pl.lit("telecom"))
+                .when((pl.col.industry.str.contains(r"(?i)retail|store|Restaurants?|\bBars?\b", literal=False)))
+                .then(pl.lit("retail"))
+                .when((pl.col.sector.str.contains(r"(?i)energy", literal=False)) & (pl.col.industry.str.contains(r"(?i)oil|gas|Petroleum Refining|coal mining", literal=False)))
+                .then(pl.lit("oilgas"))
+                .when((pl.col.sector == "Financial"))
+                .then(pl.lit("finance"))
+                .when(pl.col.sector.str.contains("(?i)utilities|energy"))
+                .then(pl.lit("utilities"))
+                .otherwise(pl.lit('Default'))  # industry, commerce
+                .alias('SctRoic')
+            )
+
+            ddf = ddf.with_columns(
+                pl.when((pl.col.SctRoic == "REIT"))
+                .then(pl.col.sinv + pl.col(f"Y{y}/BAL/AGWI") + pl.col(f"Y{y}/BAL/APPN") + pl.col.NWC + pl.col.NetDebtOp)
+                .when((pl.col.SctRoic == "Financial"))
+                .then(pl.col(f"Y{y}/BAL/AGWI") + pl.col(f"Y{y}/BAL/AINT") + pl.col.NWC)
+                .when((pl.col.SctRoic == "bank"))
+                .then(pl.lit(0))  # invert next ROIC compute for banks
+                .when((pl.col.SctRoic == "biotech"))
+                .then(pl.col(f"Y{y}/BAL/AGWI") + pl.col(f"Y{y}/BAL/AINT") + pl.col.NWC)
+                .when((pl.col.SctRoic == "utilities"))
+                .then(pl.col(f"Y{y}/BAL/APPN") + pl.col.sinv + pl.col.NetDebtOp)
+                .when((pl.col.SctRoic == "IT"))
+                .then(pl.col(f"Y{y}/BAL/AGWI") + pl.col.NWC + pl.col(f"Y{y}/BAL/APPN"))
+                .when((pl.col.SctRoic == "telecom"))
+                .then(pl.col.sinv + pl.col(f"Y{y}/BAL/AGWI") + pl.col.NetDebtOp)
+                .when((pl.col.SctRoic == "retail"))
+                .then(pl.col(f"Y{y}/BAL/APPN") + pl.col.NWC + pl.col(f"Y{y}/BAL/AITL"))
+                .when((pl.col.SctRoic == "oilgas"))
+                .then(pl.col.sinv + pl.col(f"Y{y}/BAL/APPN"))
+                .otherwise(pl.col(f"Y{y}/BAL/APPN") + pl.col(f"Y{y}/BAL/AGWI") + pl.col(f"Y{y}/BAL/AINT") + pl.col.NWC + pl.col.NetDebtOp)  # Default Industrie/Commerce
+                .alias('ic')
+            )
+            
+            ddf = ddf.with_columns(
+                pl.when((pl.col.ic < 1.0))
+                .then(pl.lit(1.0))
+                .otherwise(pl.col.ic)
+                .alias('ic')
+            )
+
+            ddf = ddf.with_columns([
+                (pl.col.ic / pl.col.atot).alias("ic_atot_ratio")
+            ])
+            
+            ddf = ddf.with_columns(
+                (pl.lit(100.0) * pl.col.nopat/pl.col.ic).alias(f"Y{y}/{roicStr}")
+            )
+            
+            ddf = ddf.with_columns(
+                pl.when(pl.col(roicStr).is_null() | pl.col(roicStr).is_nan() | pl.col(roicStr).is_infinite() | (pl.col(roicStr) == 0))   #  | (pl.col(roicStr) > 500
+                .then(pl.col(f"Y{y}/{roicStr}"))
+                .otherwise(pl.col(roicStr))
+                .alias(roicStr)
+            ) 
+    
+    #ddf = ddf.drop(['nopat', 'sopi', 'atot', 'sinv', 'NWC', 'NetDebtOp', 'ic', "ic_atot_ratio"], strict=False)  # 'SctRoic',  f"new{roicStr}" 
+      
+    return ddf        
+
+
 def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> pl.DataFrame:
     global isinDebug
     global filterCountry
@@ -686,11 +943,12 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
     info_df = getAll(cookies, headers, credentials, basedir)
 
     if info_df.shape[0] > 0:
-        # Convert to polars for compute_rank
-        df = compute_rank(info_df, "score", ranking)
-        logger.debug(f"Number of stock entries after ranking: {df.shape[0]} / columns: {df.shape[1]}")
-        df = compute_dcf(df, g=13.0/100.0, t=4.5/100.0, DCFstr="DCF", SalesStr="EnSolde2")
+        df = compute_roic(info_df, roicStr="roic")  # create also Sctroic column
+        logger.debug(f"Number of stock entries after ROIC: {df.shape[0]} / columns: {df.shape[1]}")
+        df = compute_dcf(df, DCFstr="DCF", SalesStr="EnSolde2")
         logger.debug(f"Number of stock entries after DCF: {df.shape[0]} / columns: {df.shape[1]}")
+        df = compute_rank(df, "score", ranking)
+        logger.debug(f"Number of stock entries after ranking: {df.shape[0]} / columns: {df.shape[1]}")
         
         # Quantile calculations for score and MKTCAP.USD
         cols = ["score", "MKTCAP.USD"]
@@ -705,7 +963,7 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
             )
         
         # Quantile calculations for score columns
-        cols = ["EPSTRENDGR", "Focf2Rev_AAvg5", "score", "EnSolde2", "YLD+PRY"]
+        cols = ["EPSTRENDGR", "roic", "score", "EnSolde2", "YLD+PRY"]
         weight = [1] * len(cols)
         weight[cols.index("score")] = len(cols) - 1
         sumweight = np.sum(weight)
@@ -794,10 +1052,6 @@ def build_csv(df: pl.DataFrame, critMinValue, critRemoveRegex, columns, filename
             pl.col("name").str.slice(0, tformat),
             pl.col("industry").str.slice(0, tformat)
         )
-
-    if columns is not None:
-        columnstmp = list(set(columns) & set(ddf.columns))
-        ddf = ddf.select(columnstmp)
         
     if filename is not None:
         # Convert to pandas for CSV writing with locale support
@@ -837,7 +1091,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             "Ratio courant", "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", 
             "EV2FCF_CurTTM", "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", 
             "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG", "EPSTRENDGR", "EnSolde2", 'DCF', 'TTMFCFSHR', 
-            'FOCF_AYr5CAGR', "MKTCAP.USD", "VOL10DUSD"
+            'FOCF_AYr5CAGR', "MKTCAP.USD", "VOL10DUSD", "TTMROAPCT", "TTMROEPCT", "roic", 'SctRoic'
         ]
         build_csv(info_df, None, None, columns, "screener4.csv", "\t", "%.1f", 40)
  
@@ -845,20 +1099,20 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         build_csv(info_df, None, None, info_df.columns, filename, "\t", "%.3f", 0)
         
         columns = [ 
-            "YSymbol", "sector", "country", "name", "industry", "qscore", "qscorePerf", "EPSTRENDGR", "Focf2Rev_AAvg5",  "EnSolde2", 
-            'DCF', "L%H", 'PR13WKPCTR', "%M200D", "ChPctPrice5Y", "Rendement", "VOL10DUSD"
+            "YSymbol", "sector", "country", "name", "industry", "qscore", "qscorePerf", "EPSTRENDGR", "EnSolde2", 
+            "%M200D", "ChPctPrice5Y", "Rendement", "TTMROAPCT", "TTMROEPCT", "roic"
         ]
         crit = (
-            ("qscore", "QS", 80),       # score loic
-            ("qscorePerf", "QSP", 90),  # score loic + perf
-            ("EPSTRENDGR", "EPS", 0),   # croissance des profits nets
-            ("Focf2Rev_AAvg5", "FCF", 4),    # ratio FOCF / Rev
-            ("EnSolde2", "SLD",   10),   # en solde de x%   DCF FCFF (discounted cash flow from free cash flow to the firm)
-            ("ChPctPrice5Y", "PRX", 0),  # croissance annuelle du prix de l'action, sans les dividendes
-            ("YLD+PRY", "YLD", 10),      # rendement dividende + croissance du prix annuel
-            ("VOL10DUSD", "VOL", 10000),  # volume quotidien en dollar US
-            ("PR13WKPCTR", "PRX3M", 0),     # variation du prix de l'action ces 3 derniers mois
-            ("%M200D", "MA200", -5),     # distance par rapport à la MM 200 jours, en pct
+            ("qscore", "QS", 80),         # score loic
+            ("qscorePerf", "QSP", 80),    # score loic + perf
+            ("EPSTRENDGR", "EPS", 0),     # croissance des profits nets
+            ("roic", "ROIC", 10),         # return on invested capital
+            ("EnSolde2", "SLD",   20),    # en solde de x%   DCF FCFF (discounted cash flow from free cash flow to the firm)
+            ("ChPctPrice5Y", "PRX", 0),   # croissance annuelle du prix de l'action, sans les dividendes
+            ("YLD+PRY", "YLD", 10),       # rendement dividende + croissance du prix annuel
+            ("VOL10DUSD", "VOL", 10000),  # daily traded volume in US dollar
+            ("PR13WKPCTR", "PRX3M", 0),   # croissance du prix de l'action ces 3 derniers mois
+            ("%M200D", "MA200", 0),       # distance par rapport à la MM 200 jours, en pct
         )
         # Removing banks, freight, holdings and mines
         critRemoveRegex = (
