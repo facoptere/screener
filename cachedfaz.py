@@ -118,5 +118,5 @@ class CachedFrankfurter(CachedApi):
             except BaseException as ee:
                 logger.error(f"cache error {ee}")
                 r = -4.0
-        logger.debug(f"FAZ API convert currency {what} in {inwhat} > {r}")
+        logger.debug(f"FAZ API convert currency {what} from {inwhat} > {r}")
         return r

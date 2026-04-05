@@ -177,7 +177,7 @@ class CachedYahooApi(CachedApi):
                 r = handle.history(period=period, interval=resolution, auto_adjust=False, back_adjust=False)
                 # print('set',type(r).__name__)
             except BaseException:
-                self.cache_set(k, 3600, None)
+                self.cache_set(k, 3600*2, None)
                 r = None
                 # print(f"!! {k}")
             # print("get_chart cache miss", r)

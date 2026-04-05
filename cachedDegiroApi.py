@@ -16,6 +16,7 @@ import logging
 import time
 from degiro_connector.trading.models.credentials import Credentials
 from typing import Optional
+from datetime import datetime
 
 logger = logging.getLogger()
 
@@ -77,10 +78,10 @@ class cachedDegiroApi(CachedApi):
     def get_config(self, **kwargs):
         k = "get_config" + str(kwargs)
         logger.debug(f"{k}")
-        r = None  # self.cache_get(k,3600)
+        r = self.cache_get(k,3600 * 24 * 7)
         if r is None:
             r = self.__trading_api.get_config()
-            self.cache_set(k, 10, r)
+            self.cache_set(k, 3600 * 24 * 7, r)
         # print(r)
         self.__user_token = r["clientId"]
         # print(f"token:{self.__user_token}")
@@ -89,10 +90,10 @@ class cachedDegiroApi(CachedApi):
     def get_client_details(self, **kwargs):
         k = "get_client_details" + str(kwargs)
         logger.debug(f"{k}")
-        r = self.cache_get(k, 10)
+        r = self.cache_get(k, 3600 * 24 * 7)
         if r is None:
             r = self.__trading_api.get_client_details(**kwargs)
-            self.cache_set(k, 10, r)
+            self.cache_set(k, 3600 * 24 * 7, r)
         # print(r)
         self.__trading_api.credentials.int_account = r["data"]["intAccount"]
         # print(f"intAccount:{self.__trading_api.credentials.int_account}")
@@ -384,14 +385,26 @@ class cachedDegiroApi(CachedApi):
             self.cache_set(k, 3600 * 24 * 7, rrr)
         
         fs = {}
-        fs_explain = {}
+        # fs_explain = {}
         try:
+            # Extract the current year
+            now = datetime.now()
+            current_year = now.year
             if rrr:
-                for t in ("annual",):  # , "interim"
+                for t in ("annual", "interim"):  # , "interim"
                     if t in rrr.get("data", []):
                         for an in rrr["data"][t]:
-                            fiscalYear = an.get("fiscalYear", "?")
+                            fiscalYear = an.get('fiscalYear', 0)
+                            #if current_year - fiscalYear < 3:
+                            period = an.get("periodNumber", 0)
+                            endDate = an.get("endDate", "0")
                             for st in an.get("statements", []):
+                                if st.get("periodType", "M") == "M" and st.get("periodLength", 12) == 12:
+                                    suffix = f"Y{fiscalYear}"
+                                elif st.get("periodType", "M") == "M" and st.get("periodLength", 12) == 6:
+                                    suffix = f"H{int(period/2)}-{endDate}"
+                                else:
+                                    suffix = f"Q{period}-{endDate}"
                                 typ = st.get("type", "?")
                                 for i in st.get("items", []):
                                     code = i.get("code")
@@ -401,13 +414,13 @@ class cachedDegiroApi(CachedApi):
                                         value = 0.0
                                     # if not i.get("meaning").__contains__(" per "):
                                     #    v = v * 1  # 000000
-                                    fs[f"Y{fiscalYear}/{typ}/{code}"] = value
-                                    fs_explain[f"Y{fiscalYear}/{typ}/{code}"] = i.get("meaning")                                   
+                                    fs[f"{suffix}/{typ}/{code}"] = {'value': value, 'meaning': i.get("meaning", "")} 
+                                    #  fs_explain[f"{suffix}/{typ}/{code}"] = i.get("meaning")
         except Exception as e:
             logger.fatal(e)
             print(repr(e))
 
-        return fs, fs_explain
+        return fs  # , fs_explain
          
         
     def get_estimates_summaries(self, **kwargs):

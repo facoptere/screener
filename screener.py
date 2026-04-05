@@ -8,7 +8,7 @@ import re
 import polars as pl
 import sys
 import traceback
- 
+import time
 from DictObj import DictObj
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -22,6 +22,7 @@ from utils import crapy_estimates_summaries_get
 from xvfb import openWindow
 import locale
 from itertools import repeat
+from typing import Dict, Any
 
 '''
 import http.client
@@ -104,7 +105,7 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
             
         financial_statements = None
         try:
-            financial_statements, _ = trading_api.get_financial_statements(product_isin=p.isin, raw=True)
+            financial_statements   = trading_api.get_financial_statements(product_isin=p.isin, raw=True)
             if "isinDebug" in globals() and row["isin"] == isinDebug:
                 logger.fatal(f"financial statements: {str(financial_statements)}")        
         except Exception as eee:
@@ -116,7 +117,22 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
             financial_statements = {}
 
         try:
+            str_version = f"Company={str(row)}\n\nCompany_profile={str(company_profile)}\n\nEstimate_summary={str(est_summary)}\n\nFinancial_statements={str(financial_statements)}\n"
             row = {**row, **company_profile, **company_ratios, **est_summary, **financial_statements}
+            # column wirh string version of all data, to produce a dedicated file per asset later on
+            row['row'] = str_version
+            # removing some column to avoid memorw issue
+            pattern = re.compile(r'^[QHY][0-9].*/')
+            now = datetime.now()
+            current_year = now.year
+            pattern2 = re.compile(rf'^Y(?:{current_year}|{current_year - 1}|{current_year - 2}).*')
+            filtered_list = [s for s in row.keys() if pattern.match(s) and not pattern2.match(s)]
+            if "isinDebug" in globals() and row["isin"] == isinDebug:
+                logger.fatal(pattern)           
+                logger.fatal(pattern2)           
+                logger.fatal(filtered_list)
+            for col in filtered_list:
+                del row[col]
         except BaseException:
             logger.fatal(f"row:{type(row)}, company_profile:{type(company_profile)}, company_ratios:{type(company_ratios)}, est_summary:{type(est_summary)}, ")
                         
@@ -261,51 +277,65 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
     return row
 
 
-def myassess(country: str, stock_list: Any, info_df: pl.DataFrame) -> pl.DataFrame:
+def myassess(country: str, stock_list: Any) -> list:
+    results = list()
     try:
         if hasattr(stock_list, "products"):
             logger.debug(f"creating threads with {len(stock_list.products)} products to search")
             with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-                results = executor.map(assess_map, stock_list.products, repeat(country))
+                results = list(executor.map(assess_map, stock_list.products, repeat(country)))
+            '''
             row_df = pl.DataFrame(results)
             if info_df.shape[0] == 0:
                 info_df = row_df
             else:
                 info_df = pl.concat([info_df, row_df], how="diagonal_relaxed")
+            '''
         else:
             print("Stock market as no product", country)
     except Exception as e:
         print(e)
         print(repr(e))
         traceback.print_exc()
-    return info_df
+        
+    return results
 
 
-def access1country(li_id: int, ctry: str, df: pl.DataFrame, errCounter: int, errCtry: Set[str]) -> Tuple[int, Set[str], pl.DataFrame]:
-    limit = 100
-    for page in range(0, 100):
-        request_stock = StocksRequest(
-            stock_country_id=li_id,
-            limit=limit,
-            offset=page * limit,
-            require_total=True,
-        )
-        stock_list = trading_api.product_search(product_request=request_stock, raw=False)
-        if hasattr(stock_list, "products") and stock_list.products is not None:
-            size = len(stock_list.products)
-            logger.warning(f"country:{ctry} list:All ({size} stocks for page {page + 1})")
-            # dowload data for all stocks in the list. It's multi-thread !!
-            if stock_list:
-                df = myassess(ctry, stock_list, df)
-            if size != limit:
+def access1country(li_id: int, ctry: str, rows: list, errCounter: int, errCtry: Set[str]) -> Tuple[int, Set[str], list]:
+    try:
+        limit = 100
+        for page in range(0, 100):
+            request_stock = StocksRequest(
+                stock_country_id=li_id,
+                limit=limit,
+                offset=page * limit,
+                require_total=True,
+            )
+            stock_list = trading_api.product_search(product_request=request_stock, raw=False)
+            if hasattr(stock_list, "products") and stock_list.products is not None:
+                size = len(stock_list.products)
+                logger.warning(f"country:{ctry} list:All ({size} stocks for page {page + 1})")
+                # dowload data for all stocks in the list. It's multi-thread !!
+                if stock_list:
+                    results = myassess(ctry, stock_list)
+                    if len(rows):
+                        rows.extend(results)
+                    else:
+                        rows = results
+                if size != limit:
+                    break
+            else:
+                logger.critical(f"Empty product list for {ctry} page {page + 1}")
+                errCounter = errCounter + 1
+                errCtry.add(ctry)
                 break
-        else:
-            logger.critical(f"Empty product list for {ctry} page {page + 1}")
-            errCounter = errCounter + 1
-            errCtry.add(ctry)
-            break
-    # end of page loop
-    return errCounter, errCtry, df
+        # end of page loop
+    except Exception as e:
+        print(e)
+        print(repr(e))
+        traceback.print_exc()
+        
+    return errCounter, errCtry, rows
 
 
 def compute(df: pl.DataFrame) -> pl.DataFrame:
@@ -529,7 +559,7 @@ def compute(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 
-def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, basedir: str) -> pl.DataFrame:
+def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, basedir: str) -> Tuple[pl.DataFrame, list]:
     global trading_api
     global yahoo_api
     global forex_api
@@ -541,8 +571,8 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
     suspectError = 0
     suspectCountries = set()
 
-    # this is the main dataframe will be filled up
-    info_df = pl.DataFrame()
+    
+    rows = list()
 
     for i in range(1, 6):
         trading_api.connect(cookies=cookies, headers=headers)
@@ -564,7 +594,7 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
                 if i > 2 and country not in suspectCountries:
                     logger.debug(f"Looping only on suspected buggy countries, skipping {country}")
                     continue
-                suspectError, suspectCountries, info_df = access1country(id, country, info_df, suspectError, suspectCountries)
+                suspectError, suspectCountries, rows = access1country(id, country, rows, suspectError, suspectCountries)
             # end of country loop
         except Exception as e:
             print(e)
@@ -580,6 +610,10 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
     del trading_api
     del yahoo_api
 
+    # this is the main dataframe will be filled up
+    logger.warning(f"Creating a polars dataframe from {len(rows)} rows... Please wait")
+    info_df = pl.DataFrame(rows, orient="row", infer_schema_length=None)
+    
     if info_df.shape[0] > 0:
         logger.warning(f"Number of stock entries before doublons: {info_df.shape[0]} / columns: {info_df.shape[1]}")
         info_df = info_df.sort("name", descending=True).group_by("name", maintain_order=True).head(1).sort("isin", descending=True).group_by("isin", maintain_order=True).head(1)
@@ -589,7 +623,7 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
     else:
         info_df = pl.DataFrame()
         
-    return info_df
+    return info_df, rows
 
 
 # DCF FCFF 
@@ -714,7 +748,6 @@ def compute_dcf(ddf: pl.DataFrame, DCFstr: str, SalesStr: str) -> pl.DataFrame:
     return ddf
 
 
-
 # DCF FCFF 
 def compute_dcfold(ddf: pl.DataFrame, g: float, t: float, DCFstr: str, SalesStr: str) -> pl.DataFrame:
     # NetDebtShr
@@ -811,98 +844,100 @@ def compute_roic(ddf: pl.DataFrame, roicStr="roic") -> pl.DataFrame:
     
     # compute most recent ROIC
     for y in [current_year, current_year - 1, current_year - 2]:
-        ebit_str = f"Y{y}/INC/SOPI"
-        if ebit_str in ddf.columns:
-            ddf = ddf.with_columns(
-                (pl.col(f"Y{y}/INC/SOPI") * (pl.lit(1.0) - (pl.col(f"Y{y}/INC/TTAX") / pl.col(f"Y{y}/INC/EIBT")))).alias('nopat'),
-                (pl.col(f"Y{y}/INC/SOPI")).alias('sopi'),
-                (pl.col(f"Y{y}/BAL/ATOT")).alias('atot'),
-                (pl.col(f"Y{y}/BAL/SINV")).alias('sinv'),
-                (pl.col(f"Y{y}/BAL/ATRC") + pl.col(f"Y{y}/BAL/AACR") + pl.col(f"Y{y}/BAL/AITL") - pl.col(f"Y{y}/BAL/LAPB") - pl.col(f"Y{y}/BAL/LAEX")).alias("NWC"),
-                (pl.col(f"Y{y}/BAL/LCLO") + pl.col(f"Y{y}/BAL/STLD") + pl.col(f"Y{y}/BAL/LTTD") - pl.col(f"Y{y}/BAL/SCSI")).alias("NetDebtOp")
-            )    
+        for val in ["/INC/SOPI", "/INC/TTAX", "/INC/EIBT", "/BAL/ATOT", "/BAL/SINV", "/BAL/ATRC", "/BAL/AACR", "/BAL/AITL", "/BAL/LAPB", "/BAL/LAEX", "/BAL/LCLO", "/BAL/STLD", "/BAL/LTTD", "/BAL/SCSI"]:
+            ebit_str = f"Y{y}{val}"
+            if ebit_str not in ddf.columns:
+                ddf = ddf.with_columns(pl.lit(0.0).alias(ebit_str))
+        ddf = ddf.with_columns(
+            (pl.col(f"Y{y}/INC/SOPI") * (pl.lit(1.0) - (pl.col(f"Y{y}/INC/TTAX") / pl.col(f"Y{y}/INC/EIBT")))).alias('nopat'),
+            (pl.col(f"Y{y}/INC/SOPI")).alias('sopi'),
+            (pl.col(f"Y{y}/BAL/ATOT")).alias('atot'),
+            (pl.col(f"Y{y}/BAL/SINV")).alias('sinv'),
+            (pl.col(f"Y{y}/BAL/ATRC") + pl.col(f"Y{y}/BAL/AACR") + pl.col(f"Y{y}/BAL/AITL") - pl.col(f"Y{y}/BAL/LAPB") - pl.col(f"Y{y}/BAL/LAEX")).alias("NWC"),
+            (pl.col(f"Y{y}/BAL/LCLO") + pl.col(f"Y{y}/BAL/STLD") + pl.col(f"Y{y}/BAL/LTTD") - pl.col(f"Y{y}/BAL/SCSI")).alias("NetDebtOp")
+        )    
 
-            ddf = ddf.with_columns(
-                pl.when((pl.col.NetDebtOp < 0.0))
-                .then(pl.lit(0.0))
-                .otherwise(pl.col.NetDebtOp)
-                .alias('NetDebtOp')
-            )
-                    
-            ddf = ddf.with_columns(
-                pl.when(pl.col.industry.str.contains(r"(?i)\bbanks?\b", literal=False))
-                .then(pl.lit("bank"))
-                .when((pl.col.sector.str.contains(r"(?i)technology|services", literal=False)) & (pl.col.industry.str.contains(r"(?i)\bsoftwares?\b|\bIT\b|Semiconductors?|Online", literal=False)))
-                .then(pl.lit("IT"))
-                .when((pl.col.sector == "Healthcare") & (pl.col.industry.str.contains(r"(?i)bio|pharma", literal=False)))
-                .then(pl.lit("biotech"))
-                .when((pl.col.industry.str.contains(r"(?i)\bREITs?\b|\breal estates?\b", literal=False)))
-                .then(pl.lit("REIT"))
-                .when((pl.col.industry.str.contains(r"(?i)telecom", literal=False)))
-                .then(pl.lit("telecom"))
-                .when((pl.col.industry.str.contains(r"(?i)retail|store|Restaurants?|\bBars?\b", literal=False)))
-                .then(pl.lit("retail"))
-                .when((pl.col.sector.str.contains(r"(?i)energy", literal=False)) & (pl.col.industry.str.contains(r"(?i)oil|gas|Petroleum Refining|coal mining", literal=False)))
-                .then(pl.lit("oilgas"))
-                .when((pl.col.sector == "Financial"))
-                .then(pl.lit("finance"))
-                .when(pl.col.sector.str.contains("(?i)utilities|energy"))
-                .then(pl.lit("utilities"))
-                .otherwise(pl.lit('Default'))  # industry, commerce
-                .alias('SctRoic')
-            )
+        ddf = ddf.with_columns(
+            pl.when((pl.col.NetDebtOp < 0.0))
+            .then(pl.lit(0.0))
+            .otherwise(pl.col.NetDebtOp)
+            .alias('NetDebtOp')
+        )
+                
+        ddf = ddf.with_columns(
+            pl.when(pl.col.industry.str.contains(r"(?i)\bbanks?\b", literal=False))
+            .then(pl.lit("bank"))
+            .when((pl.col.sector.str.contains(r"(?i)technology|services", literal=False)) & (pl.col.industry.str.contains(r"(?i)\bsoftwares?\b|\bIT\b|Semiconductors?|Online", literal=False)))
+            .then(pl.lit("IT"))
+            .when((pl.col.sector == "Healthcare") & (pl.col.industry.str.contains(r"(?i)bio|pharma", literal=False)))
+            .then(pl.lit("biotech"))
+            .when((pl.col.industry.str.contains(r"(?i)\bREITs?\b|\breal estates?\b", literal=False)))
+            .then(pl.lit("REIT"))
+            .when((pl.col.industry.str.contains(r"(?i)telecom", literal=False)))
+            .then(pl.lit("telecom"))
+            .when((pl.col.industry.str.contains(r"(?i)retail|store|Restaurants?|\bBars?\b", literal=False)))
+            .then(pl.lit("retail"))
+            .when((pl.col.sector.str.contains(r"(?i)energy", literal=False)) & (pl.col.industry.str.contains(r"(?i)oil|gas|Petroleum Refining|coal mining", literal=False)))
+            .then(pl.lit("oilgas"))
+            .when((pl.col.sector == "Financial"))
+            .then(pl.lit("finance"))
+            .when(pl.col.sector.str.contains("(?i)utilities|energy"))
+            .then(pl.lit("utilities"))
+            .otherwise(pl.lit('Default'))  # industry, commerce
+            .alias('SctRoic')
+        )
 
-            ddf = ddf.with_columns(
-                pl.when((pl.col.SctRoic == "REIT"))
-                .then(pl.col.sinv + pl.col(f"Y{y}/BAL/AGWI") + pl.col(f"Y{y}/BAL/APPN") + pl.col.NWC + pl.col.NetDebtOp)
-                .when((pl.col.SctRoic == "Financial"))
-                .then(pl.col(f"Y{y}/BAL/AGWI") + pl.col(f"Y{y}/BAL/AINT") + pl.col.NWC)
-                .when((pl.col.SctRoic == "bank"))
-                .then(pl.lit(0))  # invert next ROIC compute for banks
-                .when((pl.col.SctRoic == "biotech"))
-                .then(pl.col(f"Y{y}/BAL/AGWI") + pl.col(f"Y{y}/BAL/AINT") + pl.col.NWC)
-                .when((pl.col.SctRoic == "utilities"))
-                .then(pl.col(f"Y{y}/BAL/APPN") + pl.col.sinv + pl.col.NetDebtOp)
-                .when((pl.col.SctRoic == "IT"))
-                .then(pl.col(f"Y{y}/BAL/AGWI") + pl.col.NWC + pl.col(f"Y{y}/BAL/APPN"))
-                .when((pl.col.SctRoic == "telecom"))
-                .then(pl.col.sinv + pl.col(f"Y{y}/BAL/AGWI") + pl.col.NetDebtOp)
-                .when((pl.col.SctRoic == "retail"))
-                .then(pl.col(f"Y{y}/BAL/APPN") + pl.col.NWC + pl.col(f"Y{y}/BAL/AITL"))
-                .when((pl.col.SctRoic == "oilgas"))
-                .then(pl.col.sinv + pl.col(f"Y{y}/BAL/APPN"))
-                .otherwise(pl.col(f"Y{y}/BAL/APPN") + pl.col(f"Y{y}/BAL/AGWI") + pl.col(f"Y{y}/BAL/AINT") + pl.col.NWC + pl.col.NetDebtOp)  # Default Industrie/Commerce
-                .alias('ic')
-            )
-            
-            ddf = ddf.with_columns(
-                pl.when((pl.col.ic < 1.0))
-                .then(pl.lit(1.0))
-                .otherwise(pl.col.ic)
-                .alias('ic')
-            )
+        ddf = ddf.with_columns(
+            pl.when((pl.col.SctRoic == "REIT"))
+            .then(pl.col.sinv + pl.col(f"Y{y}/BAL/AGWI") + pl.col(f"Y{y}/BAL/APPN") + pl.col.NWC + pl.col.NetDebtOp)
+            .when((pl.col.SctRoic == "Financial"))
+            .then(pl.col(f"Y{y}/BAL/AGWI") + pl.col(f"Y{y}/BAL/AINT") + pl.col.NWC)
+            .when((pl.col.SctRoic == "bank"))
+            .then(pl.lit(0))  # invert next ROIC compute for banks
+            .when((pl.col.SctRoic == "biotech"))
+            .then(pl.col(f"Y{y}/BAL/AGWI") + pl.col(f"Y{y}/BAL/AINT") + pl.col.NWC)
+            .when((pl.col.SctRoic == "utilities"))
+            .then(pl.col(f"Y{y}/BAL/APPN") + pl.col.sinv + pl.col.NetDebtOp)
+            .when((pl.col.SctRoic == "IT"))
+            .then(pl.col(f"Y{y}/BAL/AGWI") + pl.col.NWC + pl.col(f"Y{y}/BAL/APPN"))
+            .when((pl.col.SctRoic == "telecom"))
+            .then(pl.col.sinv + pl.col(f"Y{y}/BAL/AGWI") + pl.col.NetDebtOp)
+            .when((pl.col.SctRoic == "retail"))
+            .then(pl.col(f"Y{y}/BAL/APPN") + pl.col.NWC + pl.col(f"Y{y}/BAL/AITL"))
+            .when((pl.col.SctRoic == "oilgas"))
+            .then(pl.col.sinv + pl.col(f"Y{y}/BAL/APPN"))
+            .otherwise(pl.col(f"Y{y}/BAL/APPN") + pl.col(f"Y{y}/BAL/AGWI") + pl.col(f"Y{y}/BAL/AINT") + pl.col.NWC + pl.col.NetDebtOp)  # Default Industrie/Commerce
+            .alias('ic')
+        )
+        
+        ddf = ddf.with_columns(
+            pl.when((pl.col.ic < 1.0))
+            .then(pl.lit(1.0))
+            .otherwise(pl.col.ic)
+            .alias('ic')
+        )
 
-            ddf = ddf.with_columns([
-                (pl.col.ic / pl.col.atot).alias("ic_atot_ratio")
-            ])
-            
-            ddf = ddf.with_columns(
-                (pl.lit(100.0) * pl.col.nopat/pl.col.ic).alias(f"Y{y}/{roicStr}")
-            )
-            
-            ddf = ddf.with_columns(
-                pl.when(pl.col(roicStr).is_null() | pl.col(roicStr).is_nan() | pl.col(roicStr).is_infinite() | (pl.col(roicStr) == 0))   #  | (pl.col(roicStr) > 500
-                .then(pl.col(f"Y{y}/{roicStr}"))
-                .otherwise(pl.col(roicStr))
-                .alias(roicStr)
-            ) 
+        ddf = ddf.with_columns([
+            (pl.col.ic / pl.col.atot).alias("ic_atot_ratio")
+        ])
+        
+        ddf = ddf.with_columns(
+            (pl.lit(100.0) * pl.col.nopat/pl.col.ic).alias(f"Y{y}/{roicStr}")
+        )
+        
+        ddf = ddf.with_columns(
+            pl.when(pl.col(roicStr).is_null() | pl.col(roicStr).is_nan() | pl.col(roicStr).is_infinite() | (pl.col(roicStr) == 0))   #  | (pl.col(roicStr) > 500
+            .then(pl.col(f"Y{y}/{roicStr}"))
+            .otherwise(pl.col(roicStr))
+            .alias(roicStr)
+        ) 
     
     #ddf = ddf.drop(['nopat', 'sopi', 'atot', 'sinv', 'NWC', 'NetDebtOp', 'ic', "ic_atot_ratio"], strict=False)  # 'SctRoic',  f"new{roicStr}" 
       
     return ddf        
 
 
-def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> pl.DataFrame:
+def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> Tuple[pl.DataFrame, list]:
     global isinDebug
     global filterCountry
 
@@ -940,8 +975,9 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
         },
     )
 
-    info_df = getAll(cookies, headers, credentials, basedir)
+    info_df, rows = getAll(cookies, headers, credentials, basedir)
 
+    
     if info_df.shape[0] > 0:
         df = compute_roic(info_df, roicStr="roic")  # create also Sctroic column
         logger.debug(f"Number of stock entries after ROIC: {df.shape[0]} / columns: {df.shape[1]}")
@@ -1008,10 +1044,10 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
             qdf["scorePerf"].pow(1.0 / (2.0 * sumweight)).alias("scorePerf")
         )#.drop("scorePerf").rename({"tmpscorePerf": "scorePerf", })
 
-        return df
+        return df, rows
     else:
         # dataframe is empty
-        return None
+        return None, None
 
 
 def build_csv(df: pl.DataFrame, critMinValue, critRemoveRegex, columns, filename, separator, fformat, tformat) -> pl.DataFrame:
@@ -1061,6 +1097,38 @@ def build_csv(df: pl.DataFrame, critMinValue, critRemoveRegex, columns, filename
     return ddf
 
 
+def create_text_file(folder_path: str, filename: str, content: str) -> None:
+    """
+    Creates a text file with the given filename and content in the specified folder.
+    
+    Args:
+        folder_path (str): Path to the folder where the file will be created.
+        filename (str): Name of the file (should end with .txt).
+        content (str): Text content to write into the file.
+    """
+    try:
+        # Validate filename
+        if not filename.strip():
+            raise ValueError("Filename cannot be empty.")
+        if not filename.lower().endswith(".txt"):
+            filename += ".txt"
+
+        # Ensure the folder exists
+        os.makedirs(folder_path, exist_ok=True)
+
+        # Full file path
+        file_path = os.path.join(folder_path, filename)
+
+        # Write content to file
+        with open(file_path, "w", encoding="utf-8") as file:
+            file.write(content)
+
+        logger.debug(f"File created successfully at: {file_path}")
+
+    except (OSError, ValueError) as e:
+        logger.warning(f"Error creating file: {e}")
+   
+    
 def push_telegram(token, chat, init_msg, crit, filename):
     telegram_token = os.getenv(token) or ""
     telegram_chatid = os.getenv(chat) or ""
@@ -1079,7 +1147,9 @@ def push_telegram(token, chat, init_msg, crit, filename):
         
         
 def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> Optional[pl.DataFrame]:
-    info_df = Screener(cookies, headers, _isinDebug, _filterCountry)
+    info_df, _ = Screener(cookies, headers, _isinDebug, _filterCountry)
+    time.sleep(2)
+
     if info_df is not None:
         info_df = info_df.sort(["country", "qscorePerf", "score"], descending=[False, True, True])
         
@@ -1103,7 +1173,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             "%M200D", "ChPctPrice5Y", "Rendement", "TTMROAPCT", "TTMROEPCT", "roic"
         ]
         crit = (
-            ("qscore", "QS", 80),         # score loic
+            ("qscore", "QS", 70),         # score loic
             ("qscorePerf", "QSP", 80),    # score loic + perf
             ("EPSTRENDGR", "EPS", 0),     # croissance des profits nets
             ("roic", "ROIC", 10),         # return on invested capital
@@ -1116,7 +1186,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         )
         # Removing banks, freight, holdings and mines
         critRemoveRegex = (
-            ("sector", r"(?i)Financial", "industry", r"(?i)bank|investment|Financial"),
+            ("sector", r"(?i)Financial", "industry", r"(?i)bank|investment|Financial|insurance"),
             ("sector", r"(?i)Basic Materials", "industry", r"(?i)Mining"),
             ("sector", r"(?i)Transportation", "industry", r"(?i)Freight|Tankers"),
             ("name", r"(?i)holding"),
@@ -1130,6 +1200,16 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         init_msg = f"Screener {datetime.now().strftime(daat)}{uch2}{ddf.shape[0]}{uch}{info_df.shape[0]}{uch2}"
         
         push_telegram("GT_TL_TOKEN", "GT_TL_CHAT", init_msg, crit, "extrait.csv")
+
+        for company in ddf["name"].to_list():
+            row = ddf.filter(pl.col('name') == company)[["row", "YSymbol", "symbol"]].head().to_dicts()[0]
+            sym = row['YSymbol']
+            if len(sym) == 0:
+                sym = row['symbol']
+            filename = re.sub(r"[^A-Z0-9().]", "_", f"{company} ({sym})")
+            dump = row['row']
+            create_text_file(folder_path="./dump/", filename=filename, content=dump)
+
         
     return info_df
 
@@ -1148,6 +1228,11 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     logger = logging.getLogger()    
-    cookies, headers = openWindow()
-    main(cookies, headers, None, None)
+    try:
+        cookies, headers = openWindow()
+        main(cookies, headers, None, None)
+    except Exception as e:
+        print(e)
+        print(repr(e))
+        traceback.print_exc()
     exit(0)
