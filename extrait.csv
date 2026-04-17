@@ -1,29 +1,26 @@
 ﻿YSymbol,sector,country,name,industry,qscore,qscorePerf,EPSTRENDGR,EnSolde2,%M200D,ChPctPrice5Y,Rendement,TTMROAPCT,TTMROEPCT,roic
-SIP.BR,Consumer/Non-Cyclical,Belgium (BEL),SIPEF NV,"Starch, Vegetable Fat & Oil Manufacturin",94,97,54.8,53.0,24.0,17.4,3.0,11.5,13.2,12.3
-2877.HK,Healthcare,China (CHN),CHINA SHINEWAY PHARMACEUTICAL GROUP LTD,Generic Pharmaceuticals,85,93,26.4,47.0,14.0,21.7,6.0,9.1,12.2,31.2
-3983.HK,Basic Materials,China (CHN),CHINA BLUECHEMICAL LTD,Agricultural Chemicals (NEC),92,92,5.5,39.0,10.0,3.9,8.2,4.6,5.2,11.9
-8049.HK,Healthcare,China (CHN),JILIN CHANGLONG,Pharmaceuticals (NEC),89,92,4.9,41.0,8.0,13.2,0.0,7.3,11.0,25.0
-ELEC.PA,Utilities,France (FRA),ELECTRICITE DE STRASBOURG SA,Electric Utilities (NEC),89,97,23.4,51.0,24.0,48.3,6.0,7.9,28.4,14.5
-1346.HK,Consumer Cyclical,Hong Kong (HKG),LEVER STYLE CORP,Apparel Wholesale,99,100,171.5,72.0,7.0,33.0,10.2,15.5,23.9,26.2
-8371.HK,Services,Hong Kong (HKG),TASTE . GOURMET GROUP LTD,Restaurants & Bars (NEC),98,100,25.9,82.0,3.0,11.4,7.1,11.2,37.5,19.6
-0135.HK,Utilities,Hong Kong (HKG),KUNLUN ENERGY COMPANY LTD,Natural Gas Distribution,99,98,8.4,24.0,1.0,10.4,4.3,5.9,8.0,11.5
-1161.HK,Services,Hong Kong (HKG),WATER OASIS GROUP LTD,Personal Care Products Retailers,94,98,24.0,89.0,11.0,4.9,9.5,6.0,24.5,30.8
-5184.T,Consumer Cyclical,Japan (JPN),NICHIRIN CO LTD,"Auto, Truck & Motorcycle Parts (NEC)",98,99,20.1,33.0,9.0,18.6,4.8,8.0,9.4,11.0
-6101.T,Capital Goods,Japan (JPN),TSUGAMI CORP,Machine Tools,91,95,43.7,20.0,46.0,18.5,3.0,16.7,22.0,16.1
-9441.T,Services,Japan (JPN),BELL-PARK CO LTD,Mobile Phone Retailers,93,92,6.9,35.0,16.0,7.8,2.7,8.8,13.5,10.1
-7080.T,Services,Japan (JPN),SPORTSFIELD CO LTD,Employment Services (NEC),79,86,115.8,43.0,7.0,26.0,1.8,23.8,37.4,47.9
-TGHN.DE,Services,Luxembourg (LUX),LOGWIN AG,"Courier, Postal, Air Freight & Land-base",97,99,12.1,45.0,13.0,11.8,5.4,7.7,15.8,19.1
-UIE.CO,Consumer/Non-Cyclical,Malta (MLT),UIE PLC,"Vegetable, Fruit & Nut Farming",79,83,5.8,25.0,14.0,18.0,4.6,20.5,19.9,30.4
-SBMO.AS,Energy,Netherlands (NLD),SBM OFFSHORE NV,Oil Related Services and Equipment (NEC),78,86,39.1,41.0,43.0,26.8,4.7,6.3,23.0,561.8
-BNOR.OL,Energy,Norway (NOR),BLUENORD ASA,Oil & Gas Exploration and Production (NE,79,83,50.5,26.0,37.0,37.1,30.3,2.9,13.4,10.4
-XTB.WA,Financial,Poland (POL),XTB SA,Brokerage Services,78,87,9.9,41.0,39.0,42.2,9.2,8.2,32.2,2322.5
-PCT.SI,Technology,Singapore (SGP),PC PARTNER GROUP LTD,Computer Hardware (NEC),99,100,89.6,66.0,27.0,50.9,4.1,5.6,10.7,11.0
-GFI,Basic Materials,South Africa (ZAF),ADR ON GOLD FIELDS LTD,Gold (NEC),92,99,37.4,26.0,21.0,42.6,3.4,28.7,52.3,33.9
-GFI.JO,Basic Materials,South Africa (ZAF),GOLD FIELDS LTD,Gold (NEC),91,98,37.4,24.0,19.0,42.2,3.5,28.7,52.3,33.9
-OFNZ.XC,Services,Switzerland (CHE),ORELL FUESSLI AG,Commercial Printing Services (NEC),88,90,7.9,48.0,35.0,6.9,4.7,11.1,14.2,16.9
-IMC.WA,Consumer/Non-Cyclical,Ukraine (UKR),IMC SA,Fishing & Farming (NEC),90,96,47.0,74.0,35.0,13.1,11.2,20.6,37.0,10.2
-MPE.L,Consumer/Non-Cyclical,United Kingdom (GBR),M P EVANS GROUP PLC,Fishing & Farming (NEC),93,97,41.6,44.0,19.0,16.6,5.1,16.9,19.8,15.6
-AEP.L,Consumer/Non-Cyclical,United Kingdom (GBR),AEP PLANTATIONS PLC,Fishing & Farming (NEC),90,96,33.3,36.0,39.0,26.1,2.5,14.6,16.3,18.8
-GCT,Services,United States (USA),GIGACLOUD TECHNOLOGY INC CLASS A,E-commerce & Auction Services,81,86,62.0,49.0,26.0,24.4,0.0,12.1,30.8,19.0
-NRT,Financial,United States (USA),NORTH EUROPEAN OIL ROYALTY TRUST,Oil & Gas Exploration and Production (NE,78,85,19.3,43.0,35.0,13.9,11.5,342.3,596.4,785.4
-PRDO,Services,United States (USA),PERDOCEO EDUCATION CORP,Miscellaneous Educational Service Provid,76,80,6.8,24.0,8.0,24.8,1.6,12.9,16.6,26.6
+SIP.BR,Consumer/Non-Cyclical,Belgium (BEL),SIPEF NV,"Starch, Vegetable Fat & Oil Manufacturin",94,97,54.8,53.0,20.0,16.2,3.0,11.5,13.2,12.3
+HME.V,Energy,Canada (CAN),HEMISPHERE ENERGY CORP,Oil & Gas Exploration and Production (NE,75,83,80.1,64.0,24.0,44.0,3.7,25.8,39.6,37.8
+3983.HK,Basic Materials,China (CHN),CHINA BLUECHEMICAL LTD,Agricultural Chemicals (NEC),93,93,5.5,42.0,9.0,3.7,8.2,4.6,5.2,11.9
+8049.HK,Healthcare,China (CHN),JILIN CHANGLONG,Pharmaceuticals (NEC),88,92,9.5,48.0,11.0,13.8,0.0,7.6,12.0,25.0
+2877.HK,Healthcare,China (CHN),CHINA SHINEWAY PHARMACEUTICAL GROUP LTD,Generic Pharmaceuticals,85,92,26.4,47.0,10.0,19.8,6.0,9.1,12.2,31.2
+ELEC.PA,Utilities,France (FRA),ELECTRICITE DE STRASBOURG SA,Electric Utilities (NEC),88,96,23.4,48.0,26.0,57.9,6.0,7.9,28.4,14.5
+1161.HK,Services,Hong Kong (HKG),WATER OASIS GROUP LTD,Personal Care Products Retailers,94,98,24.0,89.0,12.0,5.1,9.5,6.0,24.5,30.8
+5184.T,Consumer Cyclical,Japan (JPN),NICHIRIN CO LTD,"Auto, Truck & Motorcycle Parts (NEC)",98,99,20.1,34.0,9.0,18.6,4.8,8.0,9.4,11.0
+5982.T,Capital Goods,Japan (JPN),MARUZEN CO LTD,Commercial Equipment,95,97,16.3,21.0,8.0,13.6,3.3,7.2,10.4,17.7
+4365.T,Basic Materials,Japan (JPN),MATSUMOTO YUSHI-SEIYAKU CO LTD,Tanning & Softening agents,92,97,14.4,56.0,7.0,14.3,2.5,6.9,8.2,23.5
+9441.T,Services,Japan (JPN),BELL-PARK CO LTD,Mobile Phone Retailers,93,91,6.9,34.0,17.0,7.9,2.7,8.8,13.5,10.1
+7080.T,Services,Japan (JPN),SPORTSFIELD CO LTD,Employment Services (NEC),79,86,115.8,44.0,6.0,25.8,1.8,23.8,37.4,47.9
+TGHN.DE,Services,Luxembourg (LUX),LOGWIN AG,"Courier, Postal, Air Freight & Land-base",96,98,12.1,43.0,7.0,8.5,5.4,7.7,15.8,19.1
+UIE.CO,Consumer/Non-Cyclical,Malta (MLT),UIE PLC,"Vegetable, Fruit & Nut Farming",79,83,5.8,24.0,12.0,17.8,4.6,20.5,19.9,30.4
+SBMO.AS,Energy,Netherlands (NLD),SBM OFFSHORE NV,Oil Related Services and Equipment (NEC),78,86,39.1,41.0,37.0,26.3,4.7,6.3,23.0,561.8
+BNOR.OL,Energy,Norway (NOR),BLUENORD ASA,Oil & Gas Exploration and Production (NE,77,81,50.5,22.0,34.0,36.3,28.9,2.9,13.4,10.4
+PCT.SI,Technology,Singapore (SGP),PC PARTNER GROUP LTD,Computer Hardware (NEC),99,100,89.6,66.0,34.0,57.0,4.1,5.6,10.7,11.0
+GFI.JO,Basic Materials,South Africa (ZAF),GOLD FIELDS LTD,Gold (NEC),90,97,37.4,21.0,14.0,41.7,3.5,28.7,52.3,33.9
+GFI,Basic Materials,South Africa (ZAF),ADR ON GOLD FIELDS LTD,Gold (NEC),90,97,37.4,20.0,15.0,40.6,3.4,28.7,52.3,33.9
+OFNZ.XC,Services,Switzerland (CHE),ORELL FUESSLI AG,Commercial Printing Services (NEC),86,87,7.9,45.0,36.0,7.7,4.7,11.1,14.2,16.9
+IMC.WA,Consumer/Non-Cyclical,Ukraine (UKR),IMC SA,Fishing & Farming (NEC),90,95,47.0,72.0,28.0,11.4,10.5,20.6,37.0,10.2
+MPE.L,Consumer/Non-Cyclical,United Kingdom (GBR),M P EVANS GROUP PLC,Fishing & Farming (NEC),92,97,41.6,41.0,21.0,17.4,5.1,16.9,19.8,15.6
+AEP.L,Consumer/Non-Cyclical,United Kingdom (GBR),AEP PLANTATIONS PLC,Fishing & Farming (NEC),90,96,33.3,37.0,35.0,24.7,2.5,14.6,16.3,18.8
+PRDO,Services,United States (USA),PERDOCEO EDUCATION CORP,Miscellaneous Educational Service Provid,80,85,6.8,28.0,10.0,26.0,1.7,12.9,16.6,26.6
+GCT,Services,United States (USA),GIGACLOUD TECHNOLOGY INC CLASS A,E-commerce & Auction Services,78,83,62.0,44.0,39.0,28.0,0.0,12.1,30.8,19.0
