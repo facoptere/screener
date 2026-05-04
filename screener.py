@@ -36,8 +36,71 @@ isinDebug = "JP3860220007"
 filterCountry = None
 logger = logging.getLogger()    
 
+
+def compute_from_chart(df: pl.DataFrame, price: float, name: str):
+    row = {
+        "%M200D": -1.0,
+        "ChPctPrice5Y": -1.0,
+        "%RS6M": -1.0,
+        "MM40W": -1.0,
+        "MM20W": -1.0,
+        "MM10W": -1.0,
+        "daily_MM1WVOL": -1.0,
+        "daily_MM10WVOL": -1.0,
+        "daily_MM4WVOL": -1.0,
+    }
+    
+    # compute MM40W %M200D %RS6M MM20W MM10W using close data
+    data = df["close"].to_numpy().copy()
+    mask = np.isnan(data)
+    data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
+
+    # setting close price if missing
+    row["NPRICE"] = data[-1] if not price else price
+
+    if df.shape[0] >= 40 and row["NPRICE"] > 0:
+        # moving average 200 days (40 weeks)
+        row["MM40W"] = np.mean(data[-40:])
+        if np.isnan(row["MM40W"]):
+            logger.fatal(f"nan for {row['isin']} <- {data}")  # should not happen
+        row["%M200D"] = ((row["NPRICE"] - row["MM40W"]) / row["MM40W"] * 100.0) if row["MM40W"] > 0.0 else -100.0
+        row["%M200D"] = round(row["%M200D"])
+    if df.shape[0] >= 26 and row["NPRICE"] > 0:
+        # relative strengh 6 months (26 weeks)
+        rs6 = data[-26]
+        row['%RS6M'] = (row["NPRICE"] - rs6) / rs6
+        row["%RS6M"] = round(row["%RS6M"]*100)
+    if df.shape[0] >= 20:        
+        # moving average 100 days (20 weeks)
+        row["MM20W"] = np.mean(data[-20:])
+    if df.shape[0] >= 10:        
+        # moving average 50 days (10 weeks)
+        row["MM10W"] = np.mean(data[-10:])
+
+    # compute MM40W %M200D %RS6M MM20W MM10W using close data
+    data = df["volume"].to_numpy().copy()
+    row["daily_MM1WVOL"] = data[-1] * 52 / 252
+    mask = np.isnan(data)
+    data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
+    if df.shape[0] >= 10:
+        # volume moving average 50 days (10 weeks)
+        row["daily_MM10WVOL"] = np.mean(data[-10:]) * 52 / 252
+    if df.shape[0] >= 4:
+        # volume moving average 20 days (4 weeks)
+        row["daily_MM4WVOL"] = np.mean(data[-4:]) * 52 / 252
+        
+    # compute ChPctPrice5Y using oldest open data
+    if df.shape[0] >= 52:
+        row["ChPctPrice5Y"] = (pow(1 + (row["NPRICE"] - df.head(1)["open"][0]) / df.head(1)["open"][0], 1 / (df.shape[0] / 52)) - 1) * 100
+        if df.shape[0] < 52 * 5:
+            logger.debug(f"Missing data to compute ChPctPrice5Y for {name}, only {df.shape[0]/52} years")  # Should not happen
+
+    return row
+
+
 def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
     row = {}
+    
     try:
         p = DictObj(dict(product))
         try:
@@ -117,11 +180,11 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
             financial_statements = {}
 
         try:
-            str_version = f"Company={str(row)}\n\nCompany_profile={str(company_profile)}\n\nEstimate_summary={str(est_summary)}\n\nFinancial_statements={str(financial_statements)}\n"
+            str_version = f"Company={str(row)}\n\nCompany_profile={str(company_profile)}\n\nFinancial_statements={str(financial_statements)}\n\nCompany_ratios={str(company_ratios)}\n\nEstimate_summary={str(est_summary)}\n"
             row = {**row, **company_profile, **company_ratios, **est_summary, **financial_statements}
             # column wirh string version of all data, to produce a dedicated file per asset later on
             row['row'] = str_version
-            # removing some column to avoid memorw issue
+            # removing some column to avoid memory issue
             pattern = re.compile(r'^[QHY][0-9].*/')
             now = datetime.now()
             current_year = now.year
@@ -179,8 +242,12 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
         if row.get("businessSummary"):
             row["businessSummary"] = row["businessSummary"].replace('"', " ")
 
-        row["%M200D"] = np.nan
-        row["ChPctPrice5Y"] = np.nan
+
+        if "NPRICE" not in row and 'closePrice' in row:
+            row['NPRICE'] = row['closePrice']
+        if "NPRICE" not in row:
+            row['NPRICE'] = 0
+            
         try:
             df = None
             if row["vwdId"] and len(row["vwdId"]) > 0:
@@ -190,33 +257,7 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
             elif row["vwdIdSecondary"] and len(row["vwdIdSecondary"]) > 0:
                 df = trading_api.get_longtermprice(row["vwdIdSecondary"], Interval.P5Y, Interval.P1W)
             if isinstance(df, pl.DataFrame) and df.shape[0] > 0:
-                LastWeekClose = df.tail(1)["close"][0]
-                if "closePriceAgeDays" in row and row['closePriceAgeDays'] < 7 and "closePrice" in row and row["closePrice"] > 0:
-                    if abs(LastWeekClose-row["closePrice"])/row["closePrice"] < .30:
-                        LastWeekClose = row["closePrice"]
-                    else:
-                        logger.warning(f"company: \"{row['name']}\" Won't update properly 'ChPctPrice5Y' since prices are too different...  LastWeekClose:{LastWeekClose}  Last close: {row['closePrice']}  last close date:{row['closePriceDate']}")
-                row["ChPctPrice5Y"] = (pow(1 + (LastWeekClose - df.head(1)["open"][0]) / df.head(1)["open"][0], 1 / (df.shape[0] / 52)) - 1) * 100
-                if df.shape[0] > 40:
-                    data = df["close"].to_numpy().copy()[-40:]
-                    mask = np.isnan(data)
-                    data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
-                    row["%M200D"] = np.mean(data)
-                    if np.isnan(row["%M200D"]):
-                        logger.fatal(f"nan for {row['isin']} <- {data}")
-                    row["%M200D"] = ((LastWeekClose - row["%M200D"]) / row["%M200D"] * 100.0) if row["%M200D"] > 0.0 else -100.0
-                    row["%M200D"] = round(row["%M200D"])
-
-                if row["isin"] == isinDebug:
-                    msg = (
-                        f"company: \"{row['name']}\" 5YCAGR:{row['ChPctPrice5Y']:.1f}% nbRows:{df.shape[0]} "
-                        f"open:{df.head(1)['open'][0]} close:{LastWeekClose} "
-                        f" last close: {row['closePrice']} last close date:{row['closePriceDate']} age:{row['closePriceAgeDays']}\n"
-                    )
-                    print(msg, df)
-            elif row["isin"] == isinDebug:
-                logger.fatal(f"company: \"{row['name']}\" 5YCAGR:{row['ChPctPrice5Y']} df:{df} last close date:{row['closePriceDate']} age:{row['closePriceAgeDays']}")
-
+                row = {**row, **compute_from_chart(df, row["NPRICE"], row["name"])}                   
         except Exception as ee:
             print(f"286 error {row['name']}")
             print(ee)
@@ -237,32 +278,12 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
             traceback.print_exc()
             pass
         
-        if ylabel and isinstance(ylabel, str) and (np.isnan(row["ChPctPrice5Y"]) or np.isnan(row["%M200D"])):
+        if ylabel and isinstance(ylabel, str) and "ChPctPrice5Y" not in row:
             try:
                 df = yahoo_api.get_longtermprice(ylabel, "5y", "1wk")
-                if isinstance(df, pl.DataFrame):
-                    if df.shape[0] > 1:
-                        data = df["Close"].to_numpy().copy()
-                        mask = np.isnan(data)
-                        data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
-                        
-                        LastWeekClose = data[-1]
-                        if np.isnan(row["ChPctPrice5Y"]):
-                            row["ChPctPrice5Y"] = (
-                                pow(1 + (LastWeekClose - data[0]) / data[0], 1 / (df.shape[0] / 52)) - 1
-                            ) * 100
-
-                        if np.isnan(row["%M200D"]) and df.shape[0] > 40:
-                            data = data[-40:]
-                            row["%M200D"] = np.mean(data)
-                            if np.isnan(row["%M200D"]):
-                                logger.fatal(f"nan for {row['isin']} <- {data}")
-                            row["%M200D"] = ((LastWeekClose - row["%M200D"]) / row["%M200D"] * 100.0) if row["%M200D"] > 0.0 else -100.0
-                            row["%M200D"] = round(row["%M200D"])
-                            
-                if row["isin"] == isinDebug:
-                    logger.fatal(f"yahoo company: \"{row['name']}\" 5YCAGR:{row['ChPctPrice5Y']} df:{df} "
-                                "last close: {row['closePrice']} last close date:{row['closePriceDate']} age:{row['closePriceAgeDays']}")
+                if isinstance(df, pl.DataFrame) and df.shape[0] > 0:
+                    df = df.rename({"Close": "close", "Volume": "volume", "Open": "open"})
+                    row = {**row, **compute_from_chart(df, row["NPRICE"], row["name"])}
             except Exception as ee:
                 print(f"303 error {row['name']}")
                 print(ee)
@@ -616,7 +637,7 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
     
     if info_df.shape[0] > 0:
         logger.warning(f"Number of stock entries before doublons: {info_df.shape[0]} / columns: {info_df.shape[1]}")
-        info_df = info_df.sort("name", descending=True).group_by("name", maintain_order=True).head(1).sort("isin", descending=True).group_by("isin", maintain_order=True).head(1)
+        info_df =  info_df.lazy().unique(subset=["isin", "name"], maintain_order=False).collect(streaming=True)
         logger.warning(f"Number of stock entries before compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
         info_df = compute(info_df)
         logger.warning(f"Number of stock entries after compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
@@ -937,6 +958,58 @@ def compute_roic(ddf: pl.DataFrame, roicStr="roic") -> pl.DataFrame:
     return ddf        
 
 
+def compute_momentum(ddf: pl.DataFrame, momStr="momentum") -> pl.DataFrame:
+    # Prix > MM50 > MM150 > MM200.
+    ddf = ddf.with_columns(((
+        (ddf["NPRICE"]*.95 > ddf["MM10W"]).cast(pl.Int8) + 
+        (ddf["NPRICE"] > ddf["MM20W"]).cast(pl.Int8)*2 +
+        (ddf["NPRICE"] > ddf["MM40W"]).cast(pl.Int8)*3 +
+        (ddf["MM10W"] > ddf["MM20W"]).cast(pl.Int8)*2 + 
+        (ddf["MM10W"] > ddf["MM40W"]).cast(pl.Int8) + 
+        (ddf["MM20W"] > ddf["MM40W"]).cast(pl.Int8))/10).fill_nan(0.0).alias('c1'))
+
+    # High 52 semaines à moins de 8%.
+    ddf = ddf.with_columns((ddf["L%H"]/100).fill_nan(0.0).pow(2).alias('c2'))
+
+    # Volume moyen en baisse sur 10 à 20 séances.
+    # moyenne sur 10 semaines supérieure à moyenne sur 4 semaines 
+    ddf = ddf.with_columns((ddf["daily_MM10WVOL"] / ddf["daily_MM4WVOL"]).fill_nan(0.0).pow(3).clip(0, 2).alias('c3')) 
+
+    # Volume du semaine > 3x moyenne longue
+    ddf = ddf.with_columns((ddf["daily_MM1WVOL"]/ddf["daily_MM10WVOL"] / 3).fill_nan(0.0).pow(3).clip(0, 2).alias('c4'))
+
+    # calcul de la performance relative sur une fenetre de 6 mois, normalisé avec la moyenne des performances relative du meme secteur
+    sector_means = ddf.group_by("sector").agg(
+        pl.mean('%RS6M').alias("%RS6M_persector")
+    )
+    ddf = ddf.join(sector_means[["sector", "%RS6M_persector"]], on="sector", how="left")
+    ddf = ddf.with_columns((ddf["%RS6M"]/ddf["%RS6M_persector"]).alias("%RS6M")) 
+
+    # Quantile calculations for score
+    cols = ['%RS6M']
+    Q_dict = {}
+    for c in cols:
+        Q_dict[c] = [ddf[c].quantile(q) for q in np.arange(0.0, 1.01, 0.01)]
+    Q = pl.DataFrame(Q_dict)
+
+    for c in cols:
+        QQ = np.array(Q[c])
+        ddf = ddf.with_columns(
+            pl.col(c).map_elements(lambda x: int(np.argmin(QQ < x)), return_dtype=pl.Int64).cast(pl.Int8).alias(f"q{c}")
+        )
+
+    # RS 6 mois dans le top décile/quintile.
+    ddf = ddf.with_columns((ddf["q%RS6M"]/100).pow(2).fill_nan(0.0).alias('c5'))
+
+    # Score=0.35×RS6m+0.20×ProxHigh+0.20×VolumeSurge+0.15×TrendQuality+0.10×VolDryUp
+    ddf = ddf.with_columns((100*((ddf["c5"].pow(1.1))*(ddf["c2"].pow(1.05))*(ddf["c4"].pow(1.2))*(ddf["c1"]*1.3)*(ddf["c3"]*1.05)*.25).pow(0.333)).cast(pl.Int8).alias(momStr))
+
+    # ddf.drop(['MM40W', '%RS6M', '%RS6M_persector', 'q%RS6M', 'MM20W', 'MM10W', 'daily_MM10WVOL', 'daily_MM4WVOL', 'daily_MM1WVOL', 'c1', 'c2', 'c3', 'c4', 'c5'])
+    
+    return ddf
+    
+    
+
 def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> Tuple[pl.DataFrame, list]:
     global isinDebug
     global filterCountry
@@ -983,9 +1056,10 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
         logger.debug(f"Number of stock entries after ROIC: {df.shape[0]} / columns: {df.shape[1]}")
         df = compute_dcf(df, DCFstr="DCF", SalesStr="EnSolde2")
         logger.debug(f"Number of stock entries after DCF: {df.shape[0]} / columns: {df.shape[1]}")
+        df = compute_momentum(df, momStr="momentum")
+        logger.debug(f"Computed momentum")
         df = compute_rank(df, "score", ranking)
         logger.debug(f"Number of stock entries after ranking: {df.shape[0]} / columns: {df.shape[1]}")
-        
         # Quantile calculations for score and MKTCAP.USD
         cols = ["score", "MKTCAP.USD"]
         Q_dict = {}
@@ -1153,7 +1227,6 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
     if info_df is not None:
         info_df = info_df.sort(["country", "qscorePerf", "score"], descending=[False, True, True])
         
-        locale.setlocale(locale.LC_NUMERIC, os.getenv("LANG", "C"))
         
         columns = [
             "symbol", "isin", "name", "sector", "industry", "country",  "qscore",  "qscorePerf", "MKTCAP", "REVPS5YGR", 
@@ -1161,28 +1234,24 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             "Ratio courant", "VE/FCF", "%M200D", "closePrice", "quoteCurrency", "En Solde", "Juste Prix", "NPRICE", "L%H", "priceCurrency", "reportCurrency", 
             "EV2FCF_CurTTM", "EV", "TTMFCF", "Net Income", "NPMTRENDGR", "Dette nette", "shrOutstanding", "EBITDA", "PR1DAYPRC", "PR5DAYPRC", "ChPctPriceMTD", 
             "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG", "EPSTRENDGR", "EnSolde2", 'DCF', 'TTMFCFSHR', 
-            'FOCF_AYr5CAGR', "MKTCAP.USD", "VOL10DUSD", "TTMROAPCT", "TTMROEPCT", "roic", 'SctRoic'
+            'FOCF_AYr5CAGR', "MKTCAP.USD", "VOL10DUSD", "TTMROAPCT", "TTMROEPCT", "roic", 'SctRoic', 'momentum'
         ]
-        build_csv(info_df, None, None, columns, "screener4.csv", "\t", "%.1f", 40)
+        #locale.setlocale(locale.LC_NUMERIC, os.getenv("LANG", "C"))  # force point as decimal sign since build_csv will use locale configuration
+        build_csv(info_df, None, None, columns, "screener4.csv", ";", "%.1f", 40)
  
         filename = f"screener-{datetime.now().strftime('%y-%m-%W')}.csv"
         build_csv(info_df, None, None, info_df.columns, filename, "\t", "%.3f", 0)
         
         columns = [ 
             "YSymbol", "sector", "country", "name", "industry", "qscore", "qscorePerf", "EPSTRENDGR", "EnSolde2", 
-            "%M200D", "ChPctPrice5Y", "Rendement", "TTMROAPCT", "TTMROEPCT", "roic"
+            "%M200D", "ChPctPrice5Y", "Rendement", "roic", "momentum"
         ]
         crit = (
-            ("qscore", "QS", 70),         # score loic
-            ("qscorePerf", "QSP", 80),    # score loic + perf
-            ("EPSTRENDGR", "EPS", 0),     # croissance des profits nets
+            ("qscorePerf", "QSP", 50),    # score loic + perf
             ("roic", "ROIC", 10),         # return on invested capital
-            ("EnSolde2", "SLD",   20),    # en solde de x%   DCF FCFF (discounted cash flow from free cash flow to the firm)
-            ("ChPctPrice5Y", "PRX", 0),   # croissance annuelle du prix de l'action, sans les dividendes
-            ("YLD+PRY", "YLD", 10),       # rendement dividende + croissance du prix annuel
-            ("VOL10DUSD", "VOL", 10000),  # daily traded volume in US dollar
-            ("PR13WKPCTR", "PRX3M", 0),   # croissance du prix de l'action ces 3 derniers mois
-            ("%M200D", "MA200", 0),       # distance par rapport à la MM 200 jours, en pct
+            ("EnSolde2", "SLD", 20),      # en solde de x%   DCF FCFF (discounted cash flow from free cash flow to the firm)
+            ("VOL10DUSD", "VOL", 20000),  # daily traded volume in US dollar
+            ("momentum", "momentum", 20), # momentum (accélération à la hausse) acceptable
         )
         # Removing banks, freight, holdings and mines
         critRemoveRegex = (
@@ -1192,7 +1261,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             ("name", r"(?i)holding"),
         )
         
-        ddf = build_csv(info_df, crit, critRemoveRegex, columns, "extrait.csv", ";", "%.1f", 40)
+        ddf = build_csv(info_df, crit, critRemoveRegex, columns, "extrait.csv", ",", "%.1f", 40)
         
         uch = "\u2571"
         daat = f"%Y{uch}%m{uch}%d"

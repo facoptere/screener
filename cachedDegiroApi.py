@@ -494,7 +494,8 @@ class cachedDegiroApi(CachedApi):
                     requestid="1",
                     resolution=resolution,
                     series=[
-                        "ohlc:" + vwdIdSecondary,
+                        f"ohlc:{vwdIdSecondary}",
+                        f"volume:{vwdIdSecondary}",
                     ],
                     tz="UTC",
                 )
@@ -515,6 +516,8 @@ class cachedDegiroApi(CachedApi):
         if isinstance(r, dict):
             try:
                 r = pl.DataFrame(r["series"][0]["data"], orient="row", schema=["timestamp", "open", "high", "low", "close"])
+                v = pl.DataFrame(r["series"][1]["data"], orient="row", schema=["timestamp", "volume"])
+                r = r.join(v[["timestamp", "volume"]], on="timestamp", how="left")
                 if len(r) == 0:
                     r = None
             except Exception as ee:
