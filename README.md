@@ -16,7 +16,7 @@ For the later, 2 CSV files will be produced:
 * [screener4.csv](screener4.csv): all assets from DEGIRO. Roughly 14000 companies are listed (file size 16MB)
 * [extrait.csv](extrait.csv): excerpt of the first list. Contains less than 50 undervaluated stocks of very profitable companies and current high momentum.
 
-## `extrait.csv(extrait.csv)` columns meaning
+## [extrait.csv](extrait.csv) columns meaning
 | Column  | Description |
 | ------------- | ------------- |
 |	**qscore**	|	Score (0-100) as good fundamental ratios	|
@@ -30,7 +30,7 @@ For the later, 2 CSV files will be produced:
 |	**momentum**	|	Momentum score (0-100)	|
 
 
-Please note that the produced Python Dataframe contains 150 columns coming from financial statements, ratios, etc...
+Please note that the produced Python Dataframe contains +150 columns coming from financial statements, ratios, etc...
 
 ## Reports
 Special reports are performed using Perplexity or Grok AI, based on companies listed on [extrait.csv](extrait.csv). Only companies with the strongest upside are kept here.
