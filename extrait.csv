@@ -1,7 +1,8 @@
 ﻿YSymbol,sector,country,name,industry,qscore,qscorePerf,EPSTRENDGR,EnSolde2,%M200D,ChPctPrice5Y,Rendement,roic,momentum
-BRM.V,Capital Goods,Canada (CAN),BIOREM INC,Purification & Treatment Equipment,86,95,37.5,51.0,39.0,41.9,0.0,25.8,34
-8049.HK,Healthcare,China (CHN),JILIN CHANGLONG,Pharmaceuticals (NEC),88,92,9.5,47.0,12.0,13.4,0.0,25.9,20
-7673.T,Technology,Japan (JPN),DAIKO TSUSAN CO LTD,Electric Equipment Wholesale,95,93,7.6,41.0,11.0,0.8,3.8,15.4,25
-4503.T,Healthcare,Japan (JPN),ASTELLAS PHARMA INC,Pharmaceuticals (NEC),80,78,20.2,43.0,13.0,7.0,3.5,10.1,21
-PNOR.OL,Energy,Norway (NOR),PETRONOR E&P ASA,Oil & Gas Exploration and Production (NE,58,62,23.5,78.0,30.0,4.2,0.0,12.7,26
-DDI,Technology,South Korea (KOR),ADR ON DOUBLEDOWN INTERACTIVE CO LTD,Casinos & Gaming (NEC),98,57,10.6,98.0,22.0,-10.0,0.0,19.3,41
+MOUR.BR,Capital Goods,Belgium (BEL),MOURY CONSTRUCT SA,Building Contractors,95,100,30.5,63.0,23.0,24.2,2.2,42.5,26
+CVG.TO,Financial,Canada (CAN),CLAIRVEST GROUP INC,Private Equity,78,75,13.0,22.0,4.0,3.6,0.0,118.2,21
+CPH.TO,Healthcare,Canada (CAN),CIPHER PHARMACEUTICALS INC,Pharmaceuticals (NEC),57,65,45.7,30.0,14.0,64.9,0.0,21.3,33
+GRK.HE,Capital Goods,Finland (FIN),GRK INFRA OYJ,Construction & Engineering (NEC),81,89,21.2,77.0,9.0,47.4,3.6,19.0,34
+1346.HK,Consumer Cyclical,Hong Kong (HKG),LEVER STYLE CORP,Apparel Wholesale,99,100,171.5,76.0,-6.0,27.1,10.2,28.1,21
+SBMO.AS,Energy,Netherlands (NLD),SBM OFFSHORE NV,Oil Related Services and Equipment (NEC),77,82,39.1,29.0,30.0,19.0,4.2,561.8,20
+DDI,Technology,South Korea (KOR),ADR ON DOUBLEDOWN INTERACTIVE CO LTD,Casinos & Gaming (NEC),98,56,10.6,98.0,23.0,-9.7,0.0,19.3,28
