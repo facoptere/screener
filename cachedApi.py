@@ -55,6 +55,7 @@ class CachedApi:
         """
         result = None
         idx = self._get_idx(key, period)
+        #print(f"G {key} {period} > {idx}")
         try:
             result = self.__db[idx]  # type: ignore
         except KeyError:
@@ -71,6 +72,7 @@ class CachedApi:
             value: Value to cache.
         """
         idx = self._get_idx(key, period)
+        #print(f"S {key} {period} > {idx}")
         self.__db[idx] = value  # type: ignore
         self.__db.commit()  # type: ignore
 

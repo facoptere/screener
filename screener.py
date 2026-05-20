@@ -18,84 +18,75 @@ from degiro_connector.trading.models.product_search import StocksRequest
 from ranking import compute_rank, ranking 
 from telegram import send_doc_to_telegram
 from typing import Any, Dict, List, Optional, Set, Tuple
-from utils import crapy_estimates_summaries_get
+from utils import crapy_estimates_summaries_get, create_text_file, convert2USD
 from xvfb import openWindow
 import locale
 from itertools import repeat
-from typing import Dict, Any
+from screenerYahoo import getAllYahoo, compute_from_chart
+from cachedDegiroApi import cachedDegiroApi
+from cachedYahooApi import CachedYahooApi
+from cachedfaz import CachedFrankfurter
+
 
 '''
 import http.client
 http.client.HTTPConnection.debuglevel = 5
 '''
-from cachedDegiroApi import cachedDegiroApi
-from cachedYahooApi import CachedYahooApi
-from cachedfaz import CachedFrankfurter
 
 isinDebug = "JP3860220007"
 filterCountry = None
 logger = logging.getLogger()    
 
 
-def compute_from_chart(df: pl.DataFrame, price: float, name: str):
-    row = {
-        "%M200D": -1.0,
-        "ChPctPrice5Y": -1.0,
-        "%RS6M": -1.0,
-        "MM40W": -1.0,
-        "MM20W": -1.0,
-        "MM10W": -1.0,
-        "daily_MM1WVOL": -1.0,
-        "daily_MM10WVOL": -1.0,
-        "daily_MM4WVOL": -1.0,
-    }
+def compute_scorePerf(df):
+    # Quantile calculations for score columns
+    cols = ["EPSTRENDGR", "roic", "score", "EnSolde2", "YLD+PRY"]
+    weight = [1] * len(cols)
+    weight[cols.index("score")] = len(cols) - 1
+    sumweight = np.sum(weight)
     
-    # compute MM40W %M200D %RS6M MM20W MM10W using close data
-    data = df["close"].to_numpy().copy()
-    mask = np.isnan(data)
-    data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
-
-    # setting close price if missing
-    row["NPRICE"] = data[-1] if not price else price
-
-    if df.shape[0] >= 40 and row["NPRICE"] > 0:
-        # moving average 200 days (40 weeks)
-        row["MM40W"] = np.mean(data[-40:])
-        if np.isnan(row["MM40W"]):
-            logger.fatal(f"nan for {row['isin']} <- {data}")  # should not happen
-        row["%M200D"] = ((row["NPRICE"] - row["MM40W"]) / row["MM40W"] * 100.0) if row["MM40W"] > 0.0 else -100.0
-        row["%M200D"] = round(row["%M200D"])
-    if df.shape[0] >= 26 and row["NPRICE"] > 0:
-        # relative strengh 6 months (26 weeks)
-        rs6 = data[-26]
-        row['%RS6M'] = (row["NPRICE"] - rs6) / rs6
-        row["%RS6M"] = round(row["%RS6M"]*100)
-    if df.shape[0] >= 20:        
-        # moving average 100 days (20 weeks)
-        row["MM20W"] = np.mean(data[-20:])
-    if df.shape[0] >= 10:        
-        # moving average 50 days (10 weeks)
-        row["MM10W"] = np.mean(data[-10:])
-
-    # compute MM40W %M200D %RS6M MM20W MM10W using close data
-    data = df["volume"].to_numpy().copy()
-    row["daily_MM1WVOL"] = data[-1] * 52 / 252
-    mask = np.isnan(data)
-    data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
-    if df.shape[0] >= 10:
-        # volume moving average 50 days (10 weeks)
-        row["daily_MM10WVOL"] = np.mean(data[-10:]) * 52 / 252
-    if df.shape[0] >= 4:
-        # volume moving average 20 days (4 weeks)
-        row["daily_MM4WVOL"] = np.mean(data[-4:]) * 52 / 252
+    # Fill nulls with 0
+    for c in cols:
+        df = df.with_columns(pl.col(c).fill_null(0.0))
         
-    # compute ChPctPrice5Y using oldest open data
-    if df.shape[0] >= 52:
-        row["ChPctPrice5Y"] = (pow(1 + (row["NPRICE"] - df.head(1)["open"][0]) / df.head(1)["open"][0], 1 / (df.shape[0] / 52)) - 1) * 100
-        if df.shape[0] < 52 * 5:
-            logger.debug(f"Missing data to compute ChPctPrice5Y for {name}, only {df.shape[0]/52} years")  # Should not happen
+    # Quantile calculations for score columns
+    Q_dict = {}
+    for c in cols:
+        Q_dict[c] = [df[c].quantile(q) for q in np.arange(0.0, 1.01, 0.01)]
+    Q = pl.DataFrame(Q_dict)
 
-    return row
+    qdf = df.select(cols).clone()
+    for c in cols:
+        qc = f"q{c}"
+        QQ = np.array(Q[c])
+        QQ[1] = QQ[50]  # 'qc' column will get a 1 when 'c' below percentile [], and so won't contribute to scorePerf
+        QQ[0] = QQ[20]  # 'qc' column will get a 0 when 'c' below percentile [], and so the final scorePerf =0
+        qdf = qdf.with_columns(
+            pl.col(c).map_elements(lambda x: np.argmin(QQ < x)/10.0, return_dtype=pl.Float64).alias(qc)
+        )
+        
+    qdf = qdf.with_columns(pl.lit(100.0).alias("scorePerf"))
+    
+    for i, c in enumerate(cols):
+        qc = f"q{c}"
+        qdf = qdf.with_columns(
+            (pl.col("scorePerf") * (pl.col(qc).fill_null(1.0) ** (2.0 * weight[i]))).alias("scorePerf")
+        )
+    
+    # Quantile for scorePerf
+    qdf_filtered = qdf.filter(pl.col("scorePerf") > 0)
+    if qdf_filtered.shape[0] > 0:
+        Q = [qdf_filtered["scorePerf"].quantile(q) for q in np.arange(0.0, 1.01, 0.01)]
+    else:
+        Q = [0.0] * 101
+    QQ = np.array(Q)
+    df = df.with_columns(
+        qdf["scorePerf"].map_elements(lambda x: int(np.argmin(QQ < x)), return_dtype=pl.Int64).alias("qscorePerf"),
+        qdf["scorePerf"].pow(1.0 / (2.0 * sumweight)).alias("scorePerf")
+    )#.drop("scorePerf").rename({"tmpscorePerf": "scorePerf", })
+    
+    return df
+
 
 
 def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
@@ -172,9 +163,9 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
             if "isinDebug" in globals() and row["isin"] == isinDebug:
                 logger.fatal(f"financial statements: {str(financial_statements)}")        
         except Exception as eee:
-            print(f"286 error {row['name']}")
-            print(eee)
-            print(repr(eee))
+            logger.debug(f"286 error {row['name']}")
+            logger.debug(eee)
+            logger.debug(repr(eee))
             traceback.print_exc()
         if financial_statements is None:
             financial_statements = {}
@@ -210,34 +201,9 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
                 row2[key] = value
         row = row2
         
-        if row.get("MKTCAP"):
-            oldcap = row["MKTCAP"]
-            newcap = -1
-            oldcur = row.get("priceCurrency", "")
-            if not len(oldcur):
-                oldcur = row.get("reportCurrency", "")
-            if not len(oldcur):
-                oldcur = row.get("currency", "")
-            if not len(oldcur):
-                oldcur = row.get("quoteCurrency", "")
-            if oldcur != "USD" and len(oldcur) > 0:
-                if oldcur == "BPN":
-                    oldcur2 = "GBP"
-                elif oldcur == "GBX":
-                    oldcur2 = "GBP"
-                else:
-                    oldcur2 = oldcur
-                rate = forex_api.convert(oldcur2, "USD") # how much for 1 USD ?
-                if isinstance(rate, float) and rate > 0.0:
-                    newcap = float(oldcap) / rate
-                    if oldcur == "GBX":
-                        newcap /= 100.0
-                    #logger.fatal(f"{row['name']} {row['isin']} {oldcap} {oldcur} -> {newcap:.2f} USD   (rate : {rate:.3f} {oldcur2} for 1 USD)")
-                    row["MKTCAP.USD"] = newcap
-                else:
-                    logger.fatal(f"{p.isin} cannot convert {row['MKTCAP']}  priceCurrency=\"{row.get('priceCurrency', '')}\"  reportCurrency=\"{row['reportCurrency']}\" currency=\"{row.get('currency', '')}\" quoteCurrency=\"{row.get('quoteCurrency', '')}\"    ")
-            elif oldcur == "USD":
-                row["MKTCAP.USD"] = row["MKTCAP"]
+        row["MKTCAP.USD"] = convert2USD(forex_api, row, "MKTCAP")
+        if isinstance(row["MKTCAP.USD"], float) and not(row["MKTCAP.USD"] != row["MKTCAP.USD"]):
+            row["MKTCAP.USD"] = int(row["MKTCAP.USD"])
 
         if row.get("businessSummary"):
             row["businessSummary"] = row["businessSummary"].replace('"', " ")
@@ -259,9 +225,9 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
             if isinstance(df, pl.DataFrame) and df.shape[0] > 0:
                 row = {**row, **compute_from_chart(df, row["NPRICE"], row["name"])}                   
         except Exception as ee:
-            print(f"286 error {row['name']}")
-            print(ee)
-            print(repr(ee))
+            logger.debug(f"286 error {row['name']}")
+            logger.debug(ee)
+            logger.debug(repr(ee))
             traceback.print_exc()
         
         row["YSymbol"] = ""
@@ -285,14 +251,20 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
                     df = df.rename({"Close": "close", "Volume": "volume", "Open": "open"})
                     row = {**row, **compute_from_chart(df, row["NPRICE"], row["name"])}
             except Exception as ee:
-                print(f"303 error {row['name']}")
-                print(ee)
-                print(repr(ee))
-                traceback.print_exc()                    
+                logger.debug(f"303 error {row['name']}")
+                logger.debug(ee)
+                logger.debug(repr(ee))
+                traceback.print_exc()
+        
+        # removing heavy content to save RAM on my PC
+        if "businessSummary" in row:
+            row['businessSummary'] = ""
+        if "row" in row:
+            row['row'] = ""
     
     except Exception as e:
         logger.fatal(e)
-        print(repr(e))
+        logger.debug(repr(e))
         traceback.print_exc()
 
     return row
@@ -313,10 +285,10 @@ def myassess(country: str, stock_list: Any) -> list:
                 info_df = pl.concat([info_df, row_df], how="diagonal_relaxed")
             '''
         else:
-            print("Stock market as no product", country)
+            logger.debug(f"Stock market as no product, country{country}")
     except Exception as e:
-        print(e)
-        print(repr(e))
+        logger.debug(e)
+        logger.debug(repr(e))
         traceback.print_exc()
         
     return results
@@ -352,8 +324,8 @@ def access1country(li_id: int, ctry: str, rows: list, errCounter: int, errCtry: 
                 break
         # end of page loop
     except Exception as e:
-        print(e)
-        print(repr(e))
+        logger.debug(e)
+        logger.debug(repr(e))
         traceback.print_exc()
         
     return errCounter, errCtry, rows
@@ -580,73 +552,6 @@ def compute(df: pl.DataFrame) -> pl.DataFrame:
     return df
 
 
-def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, basedir: str) -> Tuple[pl.DataFrame, list]:
-    global trading_api
-    global yahoo_api
-    global forex_api
-
-    trading_api = cachedDegiroApi(os.path.join(basedir, "cacheDegiro.bin"), credentials)
-    yahoo_api = CachedYahooApi(os.path.join(basedir, "cacheYahoo.bin"))
-    forex_api = CachedFrankfurter(os.path.join(basedir, "cacheFrankfurter.bin"))
-
-    suspectError = 0
-    suspectCountries = set()
-
-    
-    rows = list()
-
-    for i in range(1, 6):
-        trading_api.connect(cookies=cookies, headers=headers)
-        suspectError = 0
-        try:
-            # get all product list, countries, marketplaces
-            trading_api.get_products_config()
-            # get IntAccount
-            trading_api.get_client_details()
-            # stocked are browsed from counties(, and not marketplaces). This is the most reliable to get all stocks
-            for id in trading_api.countries:
-                li_dict = trading_api.countries[id]
-                country = li_dict['name']
-                if "filterCountry" in globals() and filterCountry is not None and (country not in filterCountry):
-                    logger.debug(f"Skipping {country}")
-                    continue
-                if country == "SB":  # fake country for non tradable assets
-                    continue
-                if i > 2 and country not in suspectCountries:
-                    logger.debug(f"Looping only on suspected buggy countries, skipping {country}")
-                    continue
-                suspectError, suspectCountries, rows = access1country(id, country, rows, suspectError, suspectCountries)
-            # end of country loop
-        except Exception as e:
-            print(e)
-            print(repr(e))
-            traceback.print_exc()
-
-        trading_api.logout()
-        logger.warning(f"Got {suspectError} errors when downloading asset pages")
-        if suspectError == 0:
-            break
-    # end of retries
-
-    del trading_api
-    del yahoo_api
-
-    # this is the main dataframe will be filled up
-    logger.warning(f"Creating a polars dataframe from {len(rows)} rows... Please wait")
-    info_df = pl.DataFrame(rows, orient="row", infer_schema_length=None)
-    
-    if info_df.shape[0] > 0:
-        logger.warning(f"Number of stock entries before doublons: {info_df.shape[0]} / columns: {info_df.shape[1]}")
-        info_df =  info_df.lazy().unique(subset=["isin", "name"], maintain_order=False).collect(streaming=True)
-        logger.warning(f"Number of stock entries before compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
-        info_df = compute(info_df)
-        logger.warning(f"Number of stock entries after compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
-    else:
-        info_df = pl.DataFrame()
-        
-    return info_df, rows
-
-
 # DCF FCFF 
 def compute_dcf(ddf: pl.DataFrame, DCFstr: str, SalesStr: str) -> pl.DataFrame:
     wacc_map = {
@@ -861,11 +766,11 @@ def compute_roic(ddf: pl.DataFrame, roicStr="roic") -> pl.DataFrame:
     pattern = re.compile(r'^Y.*/')
     filtered_list = [s for s in ddf.columns if pattern.match(s)]
     for col in filtered_list:
-        ddf = ddf.with_columns(pl.col(col).fill_null(strategy="zero"))
+        ddf = ddf.with_columns(pl.col(col).cast(pl.Float64).fill_null(strategy="zero"))
     
     # compute most recent ROIC
     for y in [current_year, current_year - 1, current_year - 2]:
-        for val in ["/INC/SOPI", "/INC/TTAX", "/INC/EIBT", "/BAL/ATOT", "/BAL/SINV", "/BAL/ATRC", "/BAL/AACR", "/BAL/AITL", "/BAL/LAPB", "/BAL/LAEX", "/BAL/LCLO", "/BAL/STLD", "/BAL/LTTD", "/BAL/SCSI"]:
+        for val in ["/INC/SOPI", "/INC/TTAX", "/INC/EIBT", "/BAL/ATOT", "/BAL/SINV", "/BAL/ATRC", "/BAL/AACR", "/BAL/AITL", "/BAL/LAPB", "/BAL/LAEX", "/BAL/LCLO", "/BAL/STLD", "/BAL/LTTD", "/BAL/SCSI", "/BAL/AGWI", "/BAL/APPN", "/BAL/AINT"]:
             ebit_str = f"Y{y}{val}"
             if ebit_str not in ddf.columns:
                 ddf = ddf.with_columns(pl.lit(0.0).alias(ebit_str))
@@ -888,19 +793,19 @@ def compute_roic(ddf: pl.DataFrame, roicStr="roic") -> pl.DataFrame:
         ddf = ddf.with_columns(
             pl.when(pl.col.industry.str.contains(r"(?i)\bbanks?\b", literal=False))
             .then(pl.lit("bank"))
-            .when((pl.col.sector.str.contains(r"(?i)technology|services", literal=False)) & (pl.col.industry.str.contains(r"(?i)\bsoftwares?\b|\bIT\b|Semiconductors?|Online", literal=False)))
+            .when((pl.col.industry.str.contains(r"(?i)retail|store|Restaurants?|\bBars?\b|distribution|resorts|casino|dealership", literal=False)))
+            .then(pl.lit("retail"))
+            .when((pl.col.sector.str.contains(r"(?i)technology|services", literal=False)) & (pl.col.industry.str.contains(r"(?i)\bsoftwares?\b|\bIT\b|Semiconductors?|Online|Internet|Gaming|multimedia|electronic|information technology|computer", literal=False)))
             .then(pl.lit("IT"))
-            .when((pl.col.sector == "Healthcare") & (pl.col.industry.str.contains(r"(?i)bio|pharma", literal=False)))
+            .when((pl.col.sector == "Healthcare") & (pl.col.industry.str.contains(r"(?i)bio|pharma|drug|research", literal=False)))
             .then(pl.lit("biotech"))
             .when((pl.col.industry.str.contains(r"(?i)\bREITs?\b|\breal estates?\b", literal=False)))
             .then(pl.lit("REIT"))
             .when((pl.col.industry.str.contains(r"(?i)telecom", literal=False)))
             .then(pl.lit("telecom"))
-            .when((pl.col.industry.str.contains(r"(?i)retail|store|Restaurants?|\bBars?\b", literal=False)))
-            .then(pl.lit("retail"))
-            .when((pl.col.sector.str.contains(r"(?i)energy", literal=False)) & (pl.col.industry.str.contains(r"(?i)oil|gas|Petroleum Refining|coal mining", literal=False)))
+            .when((pl.col.sector.str.contains(r"(?i)energy", literal=False)) & (pl.col.industry.str.contains(r"(?i)oil|gas|Petroleum Refining|coal mining|thermal coal", literal=False)))
             .then(pl.lit("oilgas"))
-            .when((pl.col.sector == "Financial"))
+            .when((pl.col.sector.str.contains(r"(?i)Financial", literal=False)))
             .then(pl.lit("finance"))
             .when(pl.col.sector.str.contains("(?i)utilities|energy"))
             .then(pl.lit("utilities"))
@@ -1007,12 +912,93 @@ def compute_momentum(ddf: pl.DataFrame, momStr="momentum") -> pl.DataFrame:
     # ddf.drop(['MM40W', '%RS6M', '%RS6M_persector', 'q%RS6M', 'MM20W', 'MM10W', 'daily_MM10WVOL', 'daily_MM4WVOL', 'daily_MM1WVOL', 'c1', 'c2', 'c3', 'c4', 'c5'])
     
     return ddf
-    
-    
 
-def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> Tuple[pl.DataFrame, list]:
+
+    
+def percentilize(df, cols):
+    Q_dict = {}
+    for c in cols:
+        Q_dict[c] = [df[c].quantile(q) for q in np.arange(0.0, 1.01, 0.01)]
+    Q = pl.DataFrame(Q_dict)
+    for c in cols:
+        QQ = np.array(Q[c])
+        df = df.with_columns(
+            pl.col(c).map_elements(lambda x: int(np.argmin(QQ < x)), return_dtype=pl.Int64).alias(f"q{c}")
+        )    
+    return df    
+
+
+
+def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, basedir: str, yahoo_api, forex_api) -> Tuple[pl.DataFrame, list]:
+    global trading_api
+    trading_api = cachedDegiroApi(os.path.join(basedir, "cacheDegiro.bin"), credentials)
+
+
+    suspectError = 0
+    suspectCountries = set()
+
+    
+    rows = list()
+
+    for i in range(1, 6):
+        trading_api.connect(cookies=cookies, headers=headers)
+        suspectError = 0
+        try:
+            # get all product list, countries, marketplaces
+            trading_api.get_products_config()
+            # get IntAccount
+            trading_api.get_client_details()
+            # stocked are browsed from counties(, and not marketplaces). This is the most reliable to get all stocks
+            for id in trading_api.countries:
+                li_dict = trading_api.countries[id]
+                country = li_dict['name']
+                if "filterCountry" in globals() and filterCountry is not None and (country not in filterCountry):
+                    logger.debug(f"Skipping {country}")
+                    continue
+                if country == "SB":  # fake country for non tradable assets
+                    continue
+                if i > 2 and country not in suspectCountries:
+                    logger.debug(f"Looping only on suspected buggy countries, skipping {country}")
+                    continue
+                suspectError, suspectCountries, rows = access1country(id, country, rows, suspectError, suspectCountries)
+            # end of country loop
+        except Exception as e:
+            logger.debug(e)
+            logger.debug(repr(e))
+            traceback.print_exc()
+
+        trading_api.logout()
+        logger.warning(f"Got {suspectError} errors when downloading asset pages")
+        if suspectError == 0:
+            break
+    # end of retries
+
+    del trading_api
+    del yahoo_api
+
+    # this is the main dataframe will be filled up
+    logger.warning(f"Creating a polars dataframe from {len(rows)} rows... Please wait")
+    info_df = pl.from_dicts(rows, infer_schema_length=None)  # , orient="row"
+    
+    if info_df.shape[0] > 0:
+        logger.warning(f"Number of stock entries before doublons: {info_df.shape[0]} / columns: {info_df.shape[1]}")
+        info_df =  info_df.lazy().unique(subset=["isin", "name"], maintain_order=False).collect(streaming=True)
+        logger.warning(f"Number of stock entries before compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
+        info_df = compute(info_df)
+        logger.warning(f"Number of stock entries after compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
+    else:
+        info_df = pl.DataFrame()
+        
+    return info_df, rows
+
+
+def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]], _yahooList: Optional[List[str]]) -> Tuple[pl.DataFrame, list]:
     global isinDebug
     global filterCountry
+
+    global yahoo_api
+    global forex_api
+
 
     isinDebug = _isinDebug
     filterCountry = _filterCountry.copy() if _filterCountry is not None else None
@@ -1038,7 +1024,7 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
     token = os.getenv("GT_DG_TOKEN") or ""
     basedir = os.getenv("GT_DG_DIRECTORY") or ""
 
-
+    
     credentials = build_credentials(
         override={
             "username": username,
@@ -1047,9 +1033,14 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
             "totp_secret_key": token,  # For 2FA
         },
     )
+    yahoo_api = CachedYahooApi(os.path.join(basedir, "cacheYahoo.bin"))
+    forex_api = CachedFrankfurter(os.path.join(basedir, "cacheFrankfurter.bin"))
 
-    info_df, rows = getAll(cookies, headers, credentials, basedir)
-
+    info_df, rows = getAll(cookies, headers, credentials, basedir, yahoo_api, forex_api)
+    info_df2, rows2 = getAllYahoo(forex_api, basedir, _yahooList)
+    rows.extend(rows2) 
+    info_df = pl.concat([info_df, info_df2], how="diagonal_relaxed")
+    logger.warning(f"Number of stock entries after merging Degiro with Yahoo finance: {info_df.shape[0]} / columns: {info_df.shape[1]}")
     
     if info_df.shape[0] > 0:
         df = compute_roic(info_df, roicStr="roic")  # create also Sctroic column
@@ -1060,63 +1051,11 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
         logger.debug(f"Computed momentum")
         df = compute_rank(df, "score", ranking)
         logger.debug(f"Number of stock entries after ranking: {df.shape[0]} / columns: {df.shape[1]}")
+        
         # Quantile calculations for score and MKTCAP.USD
-        cols = ["score", "MKTCAP.USD"]
-        Q_dict = {}
-        for c in cols:
-            Q_dict[c] = [df[c].quantile(q) for q in np.arange(0.0, 1.01, 0.01)]
-        Q = pl.DataFrame(Q_dict)
-        for c in cols:
-            QQ = np.array(Q[c])
-            df = df.with_columns(
-                pl.col(c).map_elements(lambda x: int(np.argmin(QQ < x)), return_dtype=pl.Int64).alias(f"q{c}")
-            )
-        
-        # Quantile calculations for score columns
-        cols = ["EPSTRENDGR", "roic", "score", "EnSolde2", "YLD+PRY"]
-        weight = [1] * len(cols)
-        weight[cols.index("score")] = len(cols) - 1
-        sumweight = np.sum(weight)
-        
-        # Fill nulls with 0
-        for c in cols:
-            df = df.with_columns(pl.col(c).fill_null(0.0))
-            
-        # Quantile calculations for score columns
-        Q_dict = {}
-        for c in cols:
-            Q_dict[c] = [df[c].quantile(q) for q in np.arange(0.0, 1.01, 0.01)]
-        Q = pl.DataFrame(Q_dict)
+        df = percentilize(df, ["score", "MKTCAP.USD"])
 
-        qdf = df.select(cols).clone()
-        for c in cols:
-            qc = f"q{c}"
-            QQ = np.array(Q[c])
-            QQ[1] = QQ[50]  # 'qc' column will get a 1 when 'c' below percentile [], and so won't contribute to scorePerf
-            QQ[0] = QQ[20]  # 'qc' column will get a 0 when 'c' below percentile [], and so the final scorePerf =0
-            qdf = qdf.with_columns(
-                pl.col(c).map_elements(lambda x: np.argmin(QQ < x)/10.0, return_dtype=pl.Float64).alias(qc)
-            )
-            
-        qdf = qdf.with_columns(pl.lit(100.0).alias("scorePerf"))
-        
-        for i, c in enumerate(cols):
-            qc = f"q{c}"
-            qdf = qdf.with_columns(
-                (pl.col("scorePerf") * (pl.col(qc).fill_null(1.0) ** (2.0 * weight[i]))).alias("scorePerf")
-            )
-        
-        # Quantile for scorePerf
-        qdf_filtered = qdf.filter(pl.col("scorePerf") > 0)
-        if qdf_filtered.shape[0] > 0:
-            Q = [qdf_filtered["scorePerf"].quantile(q) for q in np.arange(0.0, 1.01, 0.01)]
-        else:
-            Q = [0.0] * 101
-        QQ = np.array(Q)
-        df = df.with_columns(
-            qdf["scorePerf"].map_elements(lambda x: int(np.argmin(QQ < x)), return_dtype=pl.Int64).alias("qscorePerf"),
-            qdf["scorePerf"].pow(1.0 / (2.0 * sumweight)).alias("scorePerf")
-        )#.drop("scorePerf").rename({"tmpscorePerf": "scorePerf", })
+        df = compute_scorePerf(df)
 
         return df, rows
     else:
@@ -1165,43 +1104,15 @@ def build_csv(df: pl.DataFrame, critMinValue, critRemoveRegex, columns, filename
         
     if filename is not None:
         # Convert to pandas for CSV writing with locale support
+        for c in (set(columns) - set(ddf.columns)):
+            logger.debug(f"adding empty column {c} in csv")
+            ddf = ddf.with_columns(pl.lit("").alias(c))
         pdf = ddf.to_pandas()[columns]
         pdf.to_csv(filename, index=False, sep=separator, decimal=locale.localeconv()["decimal_point"], encoding="utf-8-sig", float_format=fformat, quoting=csv.QUOTE_MINIMAL)
     
     return ddf
 
-
-def create_text_file(folder_path: str, filename: str, content: str) -> None:
-    """
-    Creates a text file with the given filename and content in the specified folder.
-    
-    Args:
-        folder_path (str): Path to the folder where the file will be created.
-        filename (str): Name of the file (should end with .txt).
-        content (str): Text content to write into the file.
-    """
-    try:
-        # Validate filename
-        if not filename.strip():
-            raise ValueError("Filename cannot be empty.")
-        if not filename.lower().endswith(".txt"):
-            filename += ".txt"
-
-        # Ensure the folder exists
-        os.makedirs(folder_path, exist_ok=True)
-
-        # Full file path
-        file_path = os.path.join(folder_path, filename)
-
-        # Write content to file
-        with open(file_path, "w", encoding="utf-8") as file:
-            file.write(content)
-
-        logger.debug(f"File created successfully at: {file_path}")
-
-    except (OSError, ValueError) as e:
-        logger.warning(f"Error creating file: {e}")
-   
+  
     
 def push_telegram(token, chat, init_msg, crit, filename):
     telegram_token = os.getenv(token) or ""
@@ -1220,10 +1131,10 @@ def push_telegram(token, chat, init_msg, crit, filename):
         )
         
         
-def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]]) -> Optional[pl.DataFrame]:
-    info_df, _ = Screener(cookies, headers, _isinDebug, _filterCountry)
+def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]], _yahooList: Optional[List[str]]) -> Optional[pl.DataFrame]:
+    info_df, _ = Screener(cookies, headers, _isinDebug, _filterCountry, _yahooList)
     time.sleep(2)
-
+    
     if info_df is not None:
         info_df = info_df.sort(["country", "qscorePerf", "score"], descending=[False, True, True])
         
@@ -1249,9 +1160,9 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         crit = (
             ("qscorePerf", "QSP", 50),    # score loic + perf
             ("roic", "ROIC", 10),         # return on invested capital
-            ("EnSolde2", "SLD", 20),      # en solde de x%   DCF FCFF (discounted cash flow from free cash flow to the firm)
-            ("VOL10DUSD", "VOL", 20000),  # daily traded volume in US dollar
-            ("momentum", "momentum", 20), # momentum (accélération à la hausse) acceptable
+            ("EnSolde2", "SLD", 30),      # en solde de x%   DCF FCFF (discounted cash flow from free cash flow to the firm)
+            ("VOL10DUSD", "VOL", 1e6),  # daily traded volume in US dollar
+            ("momentum", "momentum", 25), # momentum (accélération à la hausse) acceptable
         )
         # Removing banks, freight, holdings and mines
         critRemoveRegex = (
@@ -1278,7 +1189,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             filename = re.sub(r"[^A-Z0-9().]", "_", f"{company} ({sym})")
             dump = row['row']
             create_text_file(folder_path="./dump/", filename=filename, content=dump)
-
+    
         
     return info_df
 
@@ -1299,9 +1210,9 @@ if __name__ == "__main__":
     logger = logging.getLogger()    
     try:
         cookies, headers = openWindow()
-        main(cookies, headers, None, None)
+        main(cookies, headers, None, None, ["KR.json", "NS BO.json", "SA.json","MX.json"])  # added korea, India, South America, Mexico static lists
     except Exception as e:
-        print(e)
-        print(repr(e))
+        logger.debug(e)
+        logger.debug(repr(e))
         traceback.print_exc()
     exit(0)

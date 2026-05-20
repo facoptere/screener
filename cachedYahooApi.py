@@ -106,21 +106,26 @@ class CachedYahooApi(CachedApi):
                     continue
                 elif q["quoteType"] == "EQUITY" and len(exchanges) > 0 and (q["exchDisp"] in exchanges or q["exchange"] in exchanges) and q["symbol"].startswith(symb):
                     continue
+                elif q["quoteType"] == "EQUITY" and len(exchanges) > 0 and q["symbol"].endswith(tuple(exchanges)):
+                    continue
                 else:
-                    logger.debug(f"product_search cleanList {txt} '{cname}' remove-> °{cleanse(q.get('longname', ''))}°{cleanse(q.get('shortname',''))}°{cleanse(q.get('prevName',''))}°")
+                    logger.debug(f"product_search cleanList({txt})='{cname}' remove-> XCH:{q['exchDisp']} SYM:{q['symbol']} {cleanse(q.get('longname', ''))}°{cleanse(q.get('shortname',''))}°{cleanse(q.get('prevName',''))}")
                     quotes.remove(q)
-                    lq -= 1             
+                    lq -= 1
             return lq, quotes      
          
         k = f"yproduct_search2 {isin} {symbol} {name}"
         quotes = self.cache_get(k, 3600 * 23 * 7)
         if quotes is None:
-            logger.debug(f"product_search yahoo {isin}/{symbol}/{name}")  
-            try:
-                quotes = self.ysearch(isin, max_results=3, news_count=0, enable_fuzzy_query=False) 
-                quotes = quotes.quotes
-            except Exception:
-                logger.debug(f"Error searching {isin} on Yahoo!")
+            if isin:
+                logger.debug(f"product_search yahoo {isin}/{symbol}/{name}")  
+                try:
+                    quotes = self.ysearch(isin, max_results=3, news_count=0, enable_fuzzy_query=False) 
+                    quotes = quotes.quotes
+                except Exception:
+                    logger.debug(f"Error searching {isin} on Yahoo!")
+                    quotes = []
+            else:
                 quotes = []
 
             lq = len(quotes)
@@ -154,7 +159,9 @@ class CachedYahooApi(CachedApi):
                 self.cache_set(k, 3600 * 23 * 7, quotes)
                 label = quotes[0].get("symbol", '')
                 yname = quotes[0].get("longname", quotes[0].get("shortname", ""))
-                logger.debug(f"product_search yahoo {isin}/{symbol}/{name}, FOUND ! -> {cleanse(name)} -> '{label}' / '{yname}'")                
+                logger.debug(f"product_search yahoo {isin}/{symbol}/{name}, FOUND ! -> {cleanse(name)} -> '{label}' / '{yname}'")
+            else:
+                self.cache_set(k, 3600 * 2, None)
 
         if quotes is not None and len(quotes) >= 1:
             return quotes[0].get("symbol",'')
@@ -184,10 +191,70 @@ class CachedYahooApi(CachedApi):
             self.cache_set(k, 3600 * 23 * 7, r)
             
         if isinstance(r, pd.DataFrame):
-            r = pl.DataFrame(r)
+            # ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume', 'Dividends', 'Stock Splits']
+            r = pl.DataFrame(r[['Open', 'High', 'Low', 'Close', 'Volume']])
             
         return r
 
+
     def get_realTimePrice(self, vwdId: list):
         return None
- 
+    
+    
+    def get_info(self, label: str) -> dict | None:
+        k = f"yget_info {label}"
+        data = self.cache_get(k, 3600 * 23 * 7)
+        if data is None:
+            try:
+                handle = yf.Ticker(label)
+                data = handle.get_info()
+                self.cache_set(k, 3600 * 23 * 7, data)
+            except BaseException:
+                data = None
+                self.cache_set(k, 3600*2, data)
+        return data
+    
+    
+        
+    def get_income_stmt(self, label: str, as_dict=False, pretty=False, freq='yearly') -> pd.DataFrame | None:
+        k = f"yget_income_stmt {label}{freq}"
+        data = self.cache_get(k, 3600 * 23 * 7)
+        if data is None:
+            try:
+                handle = yf.Ticker(label)
+                data = handle.get_income_stmt(as_dict=as_dict, pretty=pretty, freq=freq)
+                self.cache_set(k, 3600 * 23 * 7, data)
+            except BaseException:
+                data = None
+                self.cache_set(k, 3600*2, data)
+        return data        
+        
+        
+        
+    def get_balance_sheet(self, label: str, as_dict=False, pretty=False, freq='yearly') -> pd.DataFrame | None:
+        k = f"yget_balance_sheet {label}{freq}"
+        data = self.cache_get(k, 3600 * 23 * 7)
+        if data is None:
+            try:
+                handle = yf.Ticker(label)
+                data = handle.get_balance_sheet(as_dict=as_dict, pretty=pretty, freq=freq)
+                self.cache_set(k, 3600 * 23 * 7, data)
+            except BaseException:
+                data = None
+                self.cache_set(k, 3600*2, data)
+        return data          
+        
+        
+        
+    def get_cashflow(self, label: str, as_dict=False, pretty=False, freq='yearly') -> pd.DataFrame | None:
+        k = f"yget_cashflow {label}{freq}"
+        data = self.cache_get(k, 3600 * 23 * 7)
+        if data is None:
+            try:
+                handle = yf.Ticker(label)
+                data = handle.get_cashflow(as_dict=as_dict, pretty=pretty, freq=freq)
+                self.cache_set(k, 3600 * 23 * 7, data)
+            except BaseException:
+                data = None
+                self.cache_set(k, 3600*2, data)
+        return data          

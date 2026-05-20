@@ -8,6 +8,12 @@ import numpy as np
 import warnings
 import re
 import unicodedata
+from cachedfaz import CachedFrankfurter
+
+import logging
+logger = logging.getLogger() 
+
+
 
 warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
@@ -190,8 +196,8 @@ def to_ascii_upper(text: str) -> str:
 
 
 def cleanse(text: str) -> str:
-    pattern = r"[ ,]+(?: {2,}[RIA]|call|CO|Co\.|Company|Corp|Corp\.|Corpo|Corporat|Corporation|HOLDINGs?|Inc|Inc\.|Incorporated|Limited|Ltd\.?|N\.V\.|NV|plc|put|S\.A\.?|S\.p\.A\.?|SA|Shares|SpA|Stock|A\.S\.|SE|AS|A/S|AB|BV|PT|OYJ|ASA|Co\.,Ltd\.|Holdings|ORD SHS|FPO|\[[A-Z0-9]{3,3}\]|ORDINARY|ORDINARY S|PREFERRED|CLASS [ABCHO]|AG|\(The\)|CPI|\(PUBL\)|AO|SCA)$"
-    pattern2 = r"^(?:The |[SAGF]DR ON )"
+    pattern = r"[ ,]+(?: {2,}[RIA]|call|CO|Co\.|Company|Corp|Corp\.|Corpo|Corporat|Corporation|HOLDINGs?|Inc|Inc\.|Incorporated|Limited|Ltd\.?|N\.V\.|NV|plc|put|S\.A\.?|S\.p\.A\.?|SA|Shares|SpA|Stock|A\.S\.|SE|AS|A/S|AB|BV|PT|OYJ|ASA|Co\.,Ltd\.|Holdings|ORD SHS|FPO|\[[A-Z0-9]{3,3}\]|ORDINARY|ORDINARY S|PREFERRED|CLASS [ABCHO]|AG|\(The\)|CPI|\(PUBL\)|AO|SCA|S.?A.?B.? de C.?V.?)$"
+    pattern2 = r"^(?:The |[SAGF]DR ON |COMPANHIA DE)"
     pattern3 = r"[^A-Z0-9]+"
     text = to_ascii_upper(text).strip()
     prev = None
@@ -205,3 +211,74 @@ def cleanse(text: str) -> str:
     text = re.sub(pattern3, " ", text.upper(), flags=re.IGNORECASE).strip()
     return text 
     # ''.join(filter(str.isalnum, text.strip())).upper()
+    
+    
+
+def create_text_file(folder_path: str, filename: str, content: str) -> None:
+    """
+    Creates a text file with the given filename and content in the specified folder.
+    
+    Args:
+        folder_path (str): Path to the folder where the file will be created.
+        filename (str): Name of the file (should end with .txt).
+        content (str): Text content to write into the file.
+    """
+    try:
+        # Validate filename
+        if not filename.strip():
+            raise ValueError("Filename cannot be empty.")
+        if not filename.lower().endswith(".txt"):
+            filename += ".txt"
+
+        # Ensure the folder exists
+        os.makedirs(folder_path, exist_ok=True)
+
+        # Full file path
+        file_path = os.path.join(folder_path, filename)
+
+        # Write content to file
+        with open(file_path, "w", encoding="utf-8") as file:
+            file.write(content)
+
+        logger.debug(f"File created successfully at: {file_path}")
+
+    except (OSError, ValueError) as e:
+        logger.warning(f"Error creating file: {e}")
+    
+    
+def convert2USD(forex_api, row: Dict, col: str) -> float: 
+    ret = -1.0
+    if col in row and type(row[col]) in [int, float] and not(row[col] != row[col]):
+        ret = float(row[col])
+        oldcap = ret
+        newcap = -1
+        oldcur = row.get("priceCurrency", "")
+        if not len(oldcur):
+            oldcur = row.get("reportCurrency", "")
+        if not len(oldcur):
+            oldcur = row.get("currency", "")
+        if not len(oldcur):
+            oldcur = row.get("quoteCurrency", "")
+        if oldcur != "USD" and len(oldcur) > 0:
+            if oldcur == "BPN":
+                oldcur2 = "GBP"
+            elif oldcur == "GBX":
+                oldcur2 = "GBP"
+            else:
+                oldcur2 = oldcur
+            rate = forex_api.convert(oldcur2, "USD")  # how much for 1 USD ?
+            if isinstance(rate, float) and rate > 0.0:
+                newcap = float(oldcap) / rate
+                if oldcur == "GBX":
+                    newcap /= 100.0
+                # logger.fatal(f"{row['name']} {row['isin']} {oldcap} {oldcur} -> {newcap:.2f} USD   (rate : {rate:.3f} {oldcur2} for 1 USD)")
+                ret = newcap
+            else:
+                logger.fatal(f"{row['name']} cannot convert {row[col]}  priceCurrency=\"{row.get('priceCurrency', '')}\"  reportCurrency=\"{row['reportCurrency']}\" currency=\"{row.get('currency', '')}\" quoteCurrency=\"{row.get('quoteCurrency', '')}\"    ")
+    else:
+        logger.info(f"Column is not legit: name:{col} type:{type(row[col]) if col in row else 'N/A'}")
+    return ret
+    
+    
+    
+    
