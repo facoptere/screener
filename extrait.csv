@@ -1,7 +1,9 @@
 ﻿YSymbol,sector,country,name,industry,qscore,qscorePerf,EPSTRENDGR,EnSolde2,%M200D,ChPctPrice5Y,Rendement,roic,momentum
-BRM.V,Capital Goods,Canada (CAN),BIOREM INC,Purification & Treatment Equipment,86,95,37.5,51.0,39.0,41.9,0.0,25.8,34
-8049.HK,Healthcare,China (CHN),JILIN CHANGLONG,Pharmaceuticals (NEC),88,92,9.5,47.0,12.0,13.4,0.0,25.9,20
-7673.T,Technology,Japan (JPN),DAIKO TSUSAN CO LTD,Electric Equipment Wholesale,95,93,7.6,41.0,11.0,0.8,3.8,15.4,25
-4503.T,Healthcare,Japan (JPN),ASTELLAS PHARMA INC,Pharmaceuticals (NEC),80,78,20.2,43.0,13.0,7.0,3.5,10.1,21
-PNOR.OL,Energy,Norway (NOR),PETRONOR E&P ASA,Oil & Gas Exploration and Production (NE,58,62,23.5,78.0,30.0,4.2,0.0,12.7,26
-DDI,Technology,South Korea (KOR),ADR ON DOUBLEDOWN INTERACTIVE CO LTD,Casinos & Gaming (NEC),98,57,10.6,98.0,22.0,-10.0,0.0,19.3,41
+CPH.TO,Healthcare,Canada (CAN),CIPHER PHARMACEUTICALS INC,Pharmaceuticals (NEC),62,68,45.7,32.0,12.0,65.0,0.0,21.3,22
+5184.T,Consumer Cyclical,Japan (JPN),NICHIRIN CO LTD,"Auto, Truck & Motorcycle Parts (NEC)",98,99,20.1,33.0,10.0,19.6,4.8,11.0,25
+7505.T,Technology,Japan (JPN),FUSO DENTSU CO LTD,Communications & Networking (NEC),95,99,28.9,67.0,5.0,28.4,2.7,12.3,27
+7292.T,Consumer Cyclical,Japan (JPN),MURAKAMI CORP,Automotive Accessories,95,96,5.7,24.0,5.0,19.0,2.9,10.6,23
+1736.T,Capital Goods,Japan (JPN),OTEC CORP,Construction Supplies & Fixtures (NEC),90,95,22.7,21.0,14.0,25.2,3.7,19.7,38
+6101.T,Capital Goods,Japan (JPN),TSUGAMI CORP,Machine Tools,81,86,31.2,44.0,85.0,29.5,3.1,21.5,28
+1879.T,Capital Goods,Japan (JPN),SHINNIHON CORP,Construction & Engineering (NEC),80,86,9.6,47.0,15.0,21.0,3.3,64.0,29
+XTB.WA,Financial,Poland (POL),XTB SA,Brokerage Services,84,95,9.9,52.0,29.0,43.9,9.2,4060.1,21
