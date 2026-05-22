@@ -568,7 +568,7 @@ def compute_dcf(ddf: pl.DataFrame, DCFstr: str, SalesStr: str) -> pl.DataFrame:
         "Default": 0.105,     # Moyenne
     }
 
-    g_map = {
+    g_map = {  # percent, like FOCF_AYr5CAGR or EPSTRENDGR
         "oilgas":    10.0, 
         "finance": 6.0, 
         "retail": 5.0, 
@@ -1147,7 +1147,7 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             "ChPctPrice5Y", "YSymbol", "businessSummary", "AROE5YAVG", "YLD+PRY", "PDATE", "qMKTCAP.USD", "VOL10DAVG", "EPSTRENDGR", "EnSolde2", 'DCF', 'TTMFCFSHR', 
             'FOCF_AYr5CAGR', "MKTCAP.USD", "VOL10DUSD", "TTMROAPCT", "TTMROEPCT", "roic", 'SctRoic', 'momentum'
         ]
-        #locale.setlocale(locale.LC_NUMERIC, os.getenv("LANG", "C"))  # force point as decimal sign since build_csv will use locale configuration
+        # locale.setlocale(locale.LC_NUMERIC, os.getenv("LANG", "C"))  # force point as decimal sign since build_csv will use locale configuration
         build_csv(info_df, None, None, columns, "screener4.csv", ";", "%.1f", 40)
  
         filename = f"screener-{datetime.now().strftime('%y-%m-%W')}.csv"
@@ -1158,11 +1158,11 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
             "%M200D", "ChPctPrice5Y", "Rendement", "roic", "momentum"
         ]
         crit = (
-            ("qscorePerf", "QSP", 50),    # score loic + perf
-            ("roic", "ROIC", 10),         # return on invested capital
-            ("EnSolde2", "SLD", 30),      # en solde de x%   DCF FCFF (discounted cash flow from free cash flow to the firm)
-            ("VOL10DUSD", "VOL", 1e6),  # daily traded volume in US dollar
-            ("momentum", "momentum", 25), # momentum (accélération à la hausse) acceptable
+            ("qscorePerf", "QSP", 50),      # score loic + perf
+            ("roic", "ROIC", 7),            # return on invested capital
+            ("EnSolde2", "SLD", 20),        # en solde de x%   DCF FCFF (discounted cash flow from free cash flow to the firm)
+            ("VOL10DUSD", "VOL", 1e6),      # daily traded volume in US dollar
+            ("momentum", "momentum", 25),   # momentum (accélération à la hausse) acceptable
         )
         # Removing banks, freight, holdings and mines
         critRemoveRegex = (
@@ -1174,21 +1174,22 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         
         ddf = build_csv(info_df, crit, critRemoveRegex, columns, "extrait.csv", ",", "%.1f", 40)
         
-        uch = "\u2571"
-        daat = f"%Y{uch}%m{uch}%d"
-        uch2 = "\u2001"
-        init_msg = f"Screener {datetime.now().strftime(daat)}{uch2}{ddf.shape[0]}{uch}{info_df.shape[0]}{uch2}"
-        
-        push_telegram("GT_TL_TOKEN", "GT_TL_CHAT", init_msg, crit, "extrait.csv")
+        if ddf.shape[0] > 0:
+            uch = "\u2571"
+            daat = f"%Y{uch}%m{uch}%d"
+            uch2 = "\u2001"
+            init_msg = f"Screener {datetime.now().strftime(daat)}{uch2}{ddf.shape[0]}{uch}{info_df.shape[0]}{uch2}"
+            
+            push_telegram("GT_TL_TOKEN", "GT_TL_CHAT", init_msg, crit, "extrait.csv")
 
-        for company in ddf["name"].to_list():
-            row = ddf.filter(pl.col('name') == company)[["row", "YSymbol", "symbol"]].head().to_dicts()[0]
-            sym = row['YSymbol']
-            if len(sym) == 0:
-                sym = row['symbol']
-            filename = re.sub(r"[^A-Z0-9().]", "_", f"{company} ({sym})")
-            dump = row['row']
-            create_text_file(folder_path="./dump/", filename=filename, content=dump)
+            for company in ddf["name"].to_list():
+                row = ddf.filter(pl.col('name') == company)[["row", "YSymbol", "symbol"]].head().to_dicts()[0]
+                sym = row['YSymbol']
+                if len(sym) == 0:
+                    sym = row['symbol']
+                filename = re.sub(r"[^A-Z0-9().]", "_", f"{company} ({sym})")
+                dump = row['row']
+                create_text_file(folder_path="./dump/", filename=filename, content=dump)
     
         
     return info_df
@@ -1210,7 +1211,7 @@ if __name__ == "__main__":
     logger = logging.getLogger()    
     try:
         cookies, headers = openWindow()
-        main(cookies, headers, None, None, ["KR.json", "NS BO.json", "SA.json","MX.json"])  # added korea, India, South America, Mexico static lists
+        main(cookies, headers, None, None, ['KL.json', 'JK.json', 'TW.json', "KS KQ.json", "NS BO.json", "SA.json","MX.json"])  # added Korea, India, South America, Mexico, Taiwan, Indonesia, Malaysia static lists
     except Exception as e:
         logger.debug(e)
         logger.debug(repr(e))
