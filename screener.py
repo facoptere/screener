@@ -1174,22 +1174,21 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         
         ddf = build_csv(info_df, crit, critRemoveRegex, columns, "extrait.csv", ",", "%.1f", 40)
         
-        if ddf.shape[0] > 0:
-            uch = "\u2571"
-            daat = f"%Y{uch}%m{uch}%d"
-            uch2 = "\u2001"
-            init_msg = f"Screener {datetime.now().strftime(daat)}{uch2}{ddf.shape[0]}{uch}{info_df.shape[0]}{uch2}"
-            
-            push_telegram("GT_TL_TOKEN", "GT_TL_CHAT", init_msg, crit, "extrait.csv")
+        uch = "\u2571"
+        daat = f"%Y{uch}%m{uch}%d"
+        uch2 = "\u2001"
+        init_msg = f"Screener {datetime.now().strftime(daat)}{uch2}{ddf.shape[0]}{uch}{info_df.shape[0]}{uch2}"
 
-            for company in ddf["name"].to_list():
-                row = ddf.filter(pl.col('name') == company)[["row", "YSymbol", "symbol"]].head().to_dicts()[0]
-                sym = row['YSymbol']
-                if len(sym) == 0:
-                    sym = row['symbol']
-                filename = re.sub(r"[^A-Z0-9().]", "_", f"{company} ({sym})")
-                dump = row['row']
-                create_text_file(folder_path="./dump/", filename=filename, content=dump)
+        push_telegram("GT_TL_TOKEN", "GT_TL_CHAT", init_msg, crit, "extrait.csv" if ddf.shape[0] > 0 else None)
+
+        for company in ddf["name"].to_list():
+            row = ddf.filter(pl.col('name') == company)[["row", "YSymbol", "symbol"]].head().to_dicts()[0]
+            sym = row['YSymbol']
+            if len(sym) == 0:
+                sym = row['symbol']
+            filename = re.sub(r"[^A-Z0-9().]", "_", f"{company} ({sym})")
+            dump = row['row']
+            create_text_file(folder_path="./dump/", filename=filename, content=dump)
     
         
     return info_df
