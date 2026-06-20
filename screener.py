@@ -256,11 +256,7 @@ def assess_map(product: Dict[str, Any], country:str) -> Dict[str, Any]:
                 logger.debug(repr(ee))
                 traceback.print_exc()
         
-        # removing heavy content to save RAM on my PC
-        if "businessSummary" in row:
-            row['businessSummary'] = ""
-        if "row" in row:
-            row['row'] = ""
+
     
     except Exception as e:
         logger.fatal(e)
@@ -981,6 +977,11 @@ def getAll(cookies: Any, headers: Optional[Dict[str, str]], credentials: Any, ba
     info_df = pl.from_dicts(rows, infer_schema_length=None)  # , orient="row"
     
     if info_df.shape[0] > 0:
+        # removing long strings to save CPU and RAM
+        info_df = info_df.with_columns(
+            pl.lit('').alias("row"),
+            pl.lit('').alias("businessSummary")
+            )
         logger.warning(f"Number of stock entries before doublons: {info_df.shape[0]} / columns: {info_df.shape[1]}")
         info_df =  info_df.lazy().unique(subset=["isin", "name"], maintain_order=False).collect(streaming=True)
         logger.warning(f"Number of stock entries before compute: {info_df.shape[0]} / columns: {info_df.shape[1]}")
@@ -1035,11 +1036,12 @@ def Screener(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Option
     )
     yahoo_api = CachedYahooApi(os.path.join(basedir, "cacheYahoo.bin"))
     forex_api = CachedFrankfurter(os.path.join(basedir, "cacheFrankfurter.bin"))
-
+    
     info_df, rows = getAll(cookies, headers, credentials, basedir, yahoo_api, forex_api)
     info_df2, rows2 = getAllYahoo(forex_api, basedir, _yahooList)
     rows.extend(rows2) 
     info_df = pl.concat([info_df, info_df2], how="diagonal_relaxed")
+
     logger.warning(f"Number of stock entries after merging Degiro with Yahoo finance: {info_df.shape[0]} / columns: {info_df.shape[1]}")
     
     if info_df.shape[0] > 0:
@@ -1132,7 +1134,7 @@ def push_telegram(token, chat, init_msg, crit, filename):
         
         
 def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[str], _filterCountry: Optional[List[str]], _yahooList: Optional[List[str]]) -> Optional[pl.DataFrame]:
-    info_df, _ = Screener(cookies, headers, _isinDebug, _filterCountry, _yahooList)
+    info_df, rows = Screener(cookies, headers, _isinDebug, _filterCountry, _yahooList)
     time.sleep(2)
     
     if info_df is not None:
@@ -1182,13 +1184,18 @@ def main(cookies: Any, headers: Optional[Dict[str, str]], _isinDebug: Optional[s
         push_telegram("GT_TL_TOKEN", "GT_TL_CHAT", init_msg, crit, "extrait.csv" if ddf.shape[0] > 0 else None)
 
         for company in ddf["name"].to_list():
-            row = ddf.filter(pl.col('name') == company)[["row", "YSymbol", "symbol"]].head().to_dicts()[0]
-            sym = row['YSymbol']
-            if len(sym) == 0:
-                sym = row['symbol']
-            filename = re.sub(r"[^A-Z0-9().]", "_", f"{company} ({sym})")
-            dump = row['row']
-            create_text_file(folder_path="./dump/", filename=filename, content=dump)
+            for r in rows:
+                if r['name'] == company:
+                    dump = r['row']
+                    if len(dump) > 0:
+                        sym = r['YSymbol']
+                        if len(sym) == 0:
+                            sym = r['symbol']
+                        print(f"{company} {sym} len:{len(dump)}")
+                        filename = re.sub(r"[^A-Z0-9().]", "_", f"{company} ({sym})")
+                        create_text_file(folder_path="./dump/", filename=filename, content=dump)
+                    else:
+                        logger.error(f"Cannot dump financial data from {company}, empty")
     
         
     return info_df

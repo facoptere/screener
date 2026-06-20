@@ -6,13 +6,13 @@ import os
 import logging
 import pandas as pd
 import polars as pl
-
-# from DictObj import DictObj
 from cachedApi import CachedApi
+from curl_cffi import requests
 import yfinance as yf
 from utils import cleanse
-
+ 
 logger = logging.getLogger()
+
 
 
 class CachedYahooApi(CachedApi):
@@ -21,41 +21,9 @@ class CachedYahooApi(CachedApi):
 
     def __init__(self, file: str):
         super().__init__(file)
-        '''
-        try:
-            if self.__session is not None:
-                pass
-        except BaseException:
-        '''
         logger.debug(f'set yahoo cache location "{os.path.dirname(file)}" <- {file}')
         yf.set_tz_cache_location(os.path.dirname(file))
-        
-        """
-        yf.enable_debug_mode()
-        self.__session = CachedLimiterSession(
-            #limiter=Limiter(RequestRate(10, Duration.SECOND*5)),
-            #bucket_class=MemoryQueueBucket,
-            #backend=SQLiteCache(file2),
-
-            per_second=1,
-            cache_name=file2,
-            bucket_class=SQLiteBucket,
-            bucket_kwargs={
-            "path": file2,
-            'isolation_level': "EXCLUSIVE",
-            'check_same_thread': True,
-            },
-        )
-
-        self.__session.request = functools.partial(self.__session.request, timeout=(15.0,15.0))
-        yf.base._requests = self.__session.request
-        yf.utils._requests = self.__session.request
-        yf.ticker._requests = self.__session.request
-        self.__session.headers['User-agent'] = (
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-            '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0'
-        )
-        """
+        self.__session = requests.Session(impersonate="chrome", timeout=15)
         super().open_db()
         logger.debug(f"Yahoo setup done")
 
@@ -63,29 +31,13 @@ class CachedYahooApi(CachedApi):
         super().__del__()
         logger.debug(f"Instance {self} destroyed.")
 
-    """
-    def get_chart(self, **kwargs):
-        k = "get_chart" + str(kwargs)
-        r = self.cache_get(k, 3600)
-        logger.debug(k)
-        if r is None:
-            try:
-                r = self.__quotecast_api.get_chart(**kwargs)
-            except BaseException:
-                self.cache_set(k, 3600, None)
-                print("!! k")
-            # print("get_chart cache miss", r)
-            self.cache_set(k, 3600, r)
-        return r
-    """
-    
     
     def ysearch(self, txt, max_results, news_count, enable_fuzzy_query):
         k = f"ysearch2 {txt} {max_results} {news_count} {enable_fuzzy_query}"
         quotes = self.cache_get(k, 3600 * 23 * 7)
         if quotes is None:
             try:
-                quotes = yf.Search(txt, max_results=max_results, news_count=news_count, enable_fuzzy_query=enable_fuzzy_query)
+                quotes = yf.Search(txt, max_results=max_results, news_count=news_count, enable_fuzzy_query=enable_fuzzy_query, session=self.__session)
                 if quotes is not None:
                     self.cache_set(k, 3600 * 23 * 7, quotes)
             except:
@@ -180,7 +132,7 @@ class CachedYahooApi(CachedApi):
         if r is None or not isinstance(r, pd.DataFrame):
             logger.debug(k)
             try:
-                handle = yf.Ticker(label)
+                handle = yf.Ticker(label, self.__session)
                 r = handle.history(period=period, interval=resolution, auto_adjust=False, back_adjust=False)
                 # print('set',type(r).__name__)
             except BaseException:
@@ -206,7 +158,7 @@ class CachedYahooApi(CachedApi):
         data = self.cache_get(k, 3600 * 23 * 7)
         if data is None:
             try:
-                handle = yf.Ticker(label)
+                handle = yf.Ticker(label, self.__session)
                 data = handle.get_info()
                 self.cache_set(k, 3600 * 23 * 7, data)
             except BaseException:
@@ -221,7 +173,7 @@ class CachedYahooApi(CachedApi):
         data = self.cache_get(k, 3600 * 23 * 7)
         if data is None:
             try:
-                handle = yf.Ticker(label)
+                handle = yf.Ticker(label, self.__session)
                 data = handle.get_income_stmt(as_dict=as_dict, pretty=pretty, freq=freq)
                 self.cache_set(k, 3600 * 23 * 7, data)
             except BaseException:
@@ -236,7 +188,7 @@ class CachedYahooApi(CachedApi):
         data = self.cache_get(k, 3600 * 23 * 7)
         if data is None:
             try:
-                handle = yf.Ticker(label)
+                handle = yf.Ticker(label, self.__session)
                 data = handle.get_balance_sheet(as_dict=as_dict, pretty=pretty, freq=freq)
                 self.cache_set(k, 3600 * 23 * 7, data)
             except BaseException:
@@ -251,7 +203,7 @@ class CachedYahooApi(CachedApi):
         data = self.cache_get(k, 3600 * 23 * 7)
         if data is None:
             try:
-                handle = yf.Ticker(label)
+                handle = yf.Ticker(label, self.__session)
                 data = handle.get_cashflow(as_dict=as_dict, pretty=pretty, freq=freq)
                 self.cache_set(k, 3600 * 23 * 7, data)
             except BaseException:

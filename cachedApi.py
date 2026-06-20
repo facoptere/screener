@@ -59,7 +59,7 @@ class CachedApi:
         try:
             result = self.__db[idx]  # type: ignore
         except KeyError:
-            sleep(0.1)  # Brief pause on miss
+            sleep(0.5)  # Brief pause on miss
         return result
 
     def cache_set(self, key: str, period: int, value: Any) -> None:
