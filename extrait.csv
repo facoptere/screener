@@ -1,3 +1,2 @@
 ﻿YSymbol,sector,country,name,industry,qscore,qscorePerf,EPSTRENDGR,EnSolde2,%M200D,ChPctPrice5Y,Rendement,roic,momentum
-STR.VI,Capital Goods,Austria (AUT),STRABAG SE,Construction & Engineering (NEC),92,98,15.6,49.0,4.0,15.5,5.4,9.0,27
-SENEB,Consumer/Non-Cyclical,United States (USA),SENECA FOODS CORP CLASS B,Frozen Food Manufacturing,97,77,3.9,55.0,21.0,25.3,0.0,7.0,57
+PCT.SI,Technology,Singapore (SGP),PC PARTNER GROUP LTD,Computer Hardware (NEC),60,89,89.6,36.0,89.0,105.1,2.4,11.0,25
