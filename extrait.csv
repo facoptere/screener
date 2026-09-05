@@ -1,18 +1,19 @@
 ﻿YSymbol,sector,country,name,industry,qscore,qscorePerf,EPSTRENDGR,EnSolde2,%M200D,ChPctPrice5Y,Rendement,roic,momentum
+1321.SR,Basic Materials,SAU,EAST PIPES INTEGRATED COMPANY FOR INDUST,Steel,81,90,74,64,19,33,3.0,53,41
+JHSF3.SA,Capital Goods,BRA,JHSF PARTICIPACOES,Real Estate - Development,92,97,44,56,13,12,7.0,31,36
 ☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆
-TGNO4.BA,Energy,ARG,TRANSPORTADORA DE GAS DEL NORTE,Oil & Gas Midstream,98,100,52,95,-21,113,10.0,24,3
-2442.TW,Capital Goods,TWN,JEAN,Real Estate - Development,96,99,100,93,-4,13,10.0,11,7
-5CF.SI,Capital Goods,SGP,OKP HOLDINGS,Construction & Engineering (NEC),96,100,27,86,-7,45,1.0,54,4
-EMAAR.AE,Capital Goods,ARE,EMAAR PROPERTIES,Real Estate - Development,99,100,31,82,-15,21,9.0,250,5
-SBMO.AS,Energy,NLD,SBM OFFSHORE,Oil Related Services and Equipment (NEC),80,82,14,81,10,23,4.0,32,10
-TRAN.BA,Utilities,ARG,COMPANIA DE TRANSPORTE DE ENERGIA ELECTR,Utilities - Regulated Electric,97,100,196,68,-14,146,9.0,19,12
-000719.SZ,Services,CHN,CENTRAL CHINA LAND MEDIA,Publishing,98,97,9,68,-4,11,6.0,32,4
-1321.SR,Basic Materials,SAU,EAST PIPES INTEGRATED COMPANY FOR INDUST,Steel,83,92,74,67,10,31,3.0,53,23
-9911.HK,Technology,CHN,NEWBORN TOWN,Social Media & Networking,78,81,59,66,-6,13,0.0,98,11
-THX.V,Basic Materials,CAN,THOR EXPLORATIONS,Gold Mining,100,100,49,64,3,33,4.0,115,3
-1530.HK,Healthcare,CHN,3SBIO,Biopharmaceuticals,98,100,43,64,-21,18,2.0,68,2
-6826.TWO,Technology,TWN,TAIWAN PURITIC,Semiconductor Equipment & Materials,81,90,63,63,-12,44,3.0,59,4
-003350.KS,Consumer/Non-Cyclical,KOR,HANKOOK COSMETICS MANUFACTURING,Household & Personal Products,78,83,80,60,14,18,1.0,56,2
-2404.TW,Industrials,TWN,UNITED INTEGRATED SERVICES,Engineering & Construction,80,88,33,59,3,40,4.0,250,16
-SRB.L,Basic Materials,GBR,SERABI GOLD,Gold Mining,99,100,55,57,3,37,2.0,53,5
-6356.T,Consumer Cyclical,JPN,NIPPON GEAR,Auto Parts,80,85,36,53,3,34,1.0,26,13
+TGNO4.BA,Energy,ARG,TRANSPORTADORA DE GAS DEL NORTE,Oil & Gas Midstream,98,100,52,95,-23,114,10.0,24,4
+2442.TW,Capital Goods,TWN,JEAN,Real Estate - Development,95,98,100,94,-6,13,10.0,11,5
+EMAAR.AE,Capital Goods,ARE,EMAAR PROPERTIES,Real Estate - Development,99,100,31,82,-14,20,9.0,250,2
+SBMO.AS,Energy,NLD,SBM OFFSHORE,Oil Related Services and Equipment (NEC),80,83,14,81,13,23,4.0,32,13
+TRAN.BA,Utilities,ARG,COMPANIA DE TRANSPORTE DE ENERGIA ELECTR,Utilities - Regulated Electric,97,100,196,70,-19,136,19.0,19,14
+1530.HK,Healthcare,CHN,3SBIO,Biopharmaceuticals,98,100,43,67,-23,16,2.0,68,1
+000719.SZ,Services,CHN,CENTRAL CHINA LAND MEDIA,Publishing,98,97,9,66,-1,12,6.0,32,7
+THX.V,Basic Materials,CAN,THOR EXPLORATIONS,Gold Mining,100,100,49,65,4,35,4.0,115,4
+9911.HK,Technology,CHN,NEWBORN TOWN,Social Media & Networking,79,82,59,65,-5,11,0.0,98,7
+1321.SR,Basic Materials,SAU,EAST PIPES INTEGRATED COMPANY FOR INDUST,Steel,81,90,74,64,19,33,3.0,53,41
+6826.TWO,Technology,TWN,TAIWAN PURITIC,Semiconductor Equipment & Materials,81,91,63,64,-13,43,3.0,59,4
+SRB.L,Basic Materials,GBR,SERABI GOLD,Gold Mining,99,100,55,59,-5,34,2.0,53,4
+2404.TW,Industrials,TWN,UNITED INTEGRATED SERVICES,Engineering & Construction,80,88,33,59,3,40,4.0,250,3
+JHSF3.SA,Capital Goods,BRA,JHSF PARTICIPACOES,Real Estate - Development,92,97,44,56,13,12,7.0,31,36
+6356.T,Consumer Cyclical,JPN,NIPPON GEAR,Auto Parts,80,85,36,53,3,33,1.0,26,3
