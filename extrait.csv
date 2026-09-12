@@ -1,19 +1,10 @@
 ﻿YSymbol,sector,country,name,industry,qscore,qscorePerf,EPSTRENDGR,EnSolde2,%M200D,ChPctPrice5Y,Rendement,roic,momentum
-1321.SR,Basic Materials,SAU,EAST PIPES INTEGRATED COMPANY FOR INDUST,Steel,81,90,74,64,19,33,3.0,53,41
-JHSF3.SA,Capital Goods,BRA,JHSF PARTICIPACOES,Real Estate - Development,92,97,44,56,13,12,7.0,31,36
 ☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆
-TGNO4.BA,Energy,ARG,TRANSPORTADORA DE GAS DEL NORTE,Oil & Gas Midstream,98,100,52,95,-23,114,10.0,24,4
-2442.TW,Capital Goods,TWN,JEAN,Real Estate - Development,95,98,100,94,-6,13,10.0,11,5
-EMAAR.AE,Capital Goods,ARE,EMAAR PROPERTIES,Real Estate - Development,99,100,31,82,-14,20,9.0,250,2
-SBMO.AS,Energy,NLD,SBM OFFSHORE,Oil Related Services and Equipment (NEC),80,83,14,81,13,23,4.0,32,13
-TRAN.BA,Utilities,ARG,COMPANIA DE TRANSPORTE DE ENERGIA ELECTR,Utilities - Regulated Electric,97,100,196,70,-19,136,19.0,19,14
-1530.HK,Healthcare,CHN,3SBIO,Biopharmaceuticals,98,100,43,67,-23,16,2.0,68,1
-000719.SZ,Services,CHN,CENTRAL CHINA LAND MEDIA,Publishing,98,97,9,66,-1,12,6.0,32,7
-THX.V,Basic Materials,CAN,THOR EXPLORATIONS,Gold Mining,100,100,49,65,4,35,4.0,115,4
-9911.HK,Technology,CHN,NEWBORN TOWN,Social Media & Networking,79,82,59,65,-5,11,0.0,98,7
-1321.SR,Basic Materials,SAU,EAST PIPES INTEGRATED COMPANY FOR INDUST,Steel,81,90,74,64,19,33,3.0,53,41
-6826.TWO,Technology,TWN,TAIWAN PURITIC,Semiconductor Equipment & Materials,81,91,63,64,-13,43,3.0,59,4
-SRB.L,Basic Materials,GBR,SERABI GOLD,Gold Mining,99,100,55,59,-5,34,2.0,53,4
-2404.TW,Industrials,TWN,UNITED INTEGRATED SERVICES,Engineering & Construction,80,88,33,59,3,40,4.0,250,3
-JHSF3.SA,Capital Goods,BRA,JHSF PARTICIPACOES,Real Estate - Development,92,97,44,56,13,12,7.0,31,36
-6356.T,Consumer Cyclical,JPN,NIPPON GEAR,Auto Parts,80,85,36,53,3,33,1.0,26,3
+TGNO4.BA,Energy,ARG,TRANSPORTADORA DE GAS DEL NORTE,Oil & Gas Midstream,98,100,52,95,-23,111,10.0,24,1
+2442.TW,Capital Goods,TWN,JEAN,Real Estate - Development,95,98,100,94,-6,11,10.0,11,1
+EMAAR.AE,Capital Goods,ARE,EMAAR PROPERTIES,Real Estate - Development,99,100,31,82,-14,21,9.0,250,2
+TRAN.BA,Utilities,ARG,COMPANIA DE TRANSPORTE DE ENERGIA ELECTR,Utilities - Regulated Electric,97,100,196,70,-19,135,19.0,19,6
+1530.HK,Healthcare,CHN,3SBIO,Biopharmaceuticals,98,100,43,67,-22,16,2.0,68,1
+THX.V,Basic Materials,CAN,THOR EXPLORATIONS,Gold Mining,100,100,49,65,3,36,4.0,111,9
+SRB.L,Basic Materials,GBR,SERABI GOLD,Gold Mining,99,100,55,59,-9,34,2.0,53,7
+JHSF3.SA,Capital Goods,BRA,JHSF PARTICIPACOES,Real Estate - Development,92,97,44,56,13,13,7.0,31,18
