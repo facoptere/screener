@@ -1,10 +1,10 @@
-﻿YSymbol,sector,country,name,industry,qscore,qscorePerf,EPSTRENDGR,EnSolde2,%M200D,ChPctPrice5Y,Rendement,roic,momentum
-☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆
-TGNO4.BA,Energy,ARG,TRANSPORTADORA DE GAS DEL NORTE,Oil & Gas Midstream,98,100,52,95,-23,111,10.0,24,1
-2442.TW,Capital Goods,TWN,JEAN,Real Estate - Development,95,98,100,94,-6,11,10.0,11,1
-EMAAR.AE,Capital Goods,ARE,EMAAR PROPERTIES,Real Estate - Development,99,100,31,82,-14,21,9.0,250,2
-TRAN.BA,Utilities,ARG,COMPANIA DE TRANSPORTE DE ENERGIA ELECTR,Utilities - Regulated Electric,97,100,196,70,-19,135,19.0,19,6
-1530.HK,Healthcare,CHN,3SBIO,Biopharmaceuticals,98,100,43,67,-22,16,2.0,68,1
-THX.V,Basic Materials,CAN,THOR EXPLORATIONS,Gold Mining,100,100,49,65,3,36,4.0,111,9
-SRB.L,Basic Materials,GBR,SERABI GOLD,Gold Mining,99,100,55,59,-9,34,2.0,53,7
-JHSF3.SA,Capital Goods,BRA,JHSF PARTICIPACOES,Real Estate - Development,92,97,44,56,13,13,7.0,31,18
+﻿YSymbol,sector,country,name,industry,qscore,qscorePerf,EPSTRENDGR,EnSolde2,%M200D,ChPctPrice5Y,MARGIN5YR,Rendement,roic,momentum
+☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆
+2442.TW,Capital Goods,TWN,JEAN,Real Estate - Development,95,98,89,93,-14,9,19.0,14.0,11,5
+TGNO4.BA,Energy,ARG,TRANSPORTADORA DE GAS DEL NORTE,Oil & Gas Midstream,97,100,51,90,-14,112,25.0,10.0,24,1
+EMAAR.AE,Capital Goods,ARE,EMAAR PROPERTIES,Real Estate - Development,99,100,31,81,-9,23,36.0,9.0,250,6
+TRAN.BA,Utilities,ARG,COMPANIA DE TRANSPORTE DE ENERGIA ELECTR,Utilities - Regulated Electric,97,100,196,68,-15,127,20.0,18.0,19,7
+1530.HK,Healthcare,CHN,3SBIO,Biopharmaceuticals,98,100,43,68,-19,19,34.0,2.0,68,1
+SRB.L,Basic Materials,GBR,SERABI GOLD,Gold Mining,99,100,55,63,-18,30,22.0,2.0,53,3
+2451.TW,Technology,TWN,TRANSCEND INFORMATION,Computer Hardware,85,95,93,57,10,32,30.0,4.0,61,14
+2877.HK,Healthcare,CHN,CHINA SHINEWAY PHARMACEUTICAL GROUP,Generic Pharmaceuticals,92,90,7,55,12,11,22.0,6.0,32,14
