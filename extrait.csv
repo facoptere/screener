@@ -1,10 +1,12 @@
 ﻿YSymbol,sector,country,name,industry,qscore,qscorePerf,EPSTRENDGR,EnSolde2,%M200D,ChPctPrice5Y,MARGIN5YR,Rendement,roic,momentum
 ☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆,☆
-TGNO4.BA,Energy,ARG,TRANSPORTADORA DE GAS DEL NORTE,Oil & Gas Midstream,98,100,51,91,-20,101,25.0,10.0,24,2
-1530.HK,Healthcare,CHN,3SBIO,Biopharmaceuticals,98,100,43,84,-21,16,34.0,2.0,68,5
-EMAAR.AE,Capital Goods,ARE,EMAAR PROPERTIES,Real Estate - Development,99,100,31,81,-8,23,36.0,9.0,250,4
-TRAN.BA,Utilities,ARG,COMPANIA DE TRANSPORTE DE ENERGIA ELECTR,Utilities - Regulated Electric,98,100,196,75,-30,114,20.0,21.0,19,6
-SRB.L,Basic Materials,GBR,SERABI GOLD,Gold Mining,99,100,55,68,-25,27,22.0,2.0,48,5
-2877.HK,Healthcare,CHN,CHINA SHINEWAY PHARMACEUTICAL GROUP,Generic Pharmaceuticals,93,93,7,66,11,12,22.0,7.0,32,7
-PPC.AX,Capital Goods,AUS,PEET,Real Estate - Development,90,88,19,63,-10,9,21.0,8.0,12,13
-2451.TW,Technology,TWN,TRANSCEND INFORMATION,Computer Hardware,86,96,93,58,3,32,30.0,4.0,61,20
+1712.HK,Basic Materials,HKG,DRAGON GOLD MINING,Gold (NEC),97,100,118,86,-9,39,21.0,0.0,65,4
+1530.HK,Healthcare,CHN,3SBIO,Biopharmaceuticals,98,100,43,84,-16,18,34.0,2.0,68,5
+TRAN.BA,Utilities,ARG,COMPANIA DE TRANSPORTE DE ENERGIA ELECTR,Utilities - Regulated Electric,97,100,180,83,-44,99,20.0,29.0,19,5
+EMAAR.AE,Capital Goods,ARE,EMAAR PROPERTIES,Real Estate - Development,99,100,29,80,0,19,36.0,8.0,250,7
+2451.TW,Technology,TWN,TRANSCEND INFORMATION,Computer Hardware,90,99,95,75,-14,26,30.0,5.0,61,11
+SRB.L,Basic Materials,GBR,SERABI GOLD,Gold Mining,99,100,55,74,-37,18,22.0,3.0,48,5
+2877.HK,Healthcare,CHN,CHINA SHINEWAY PHARMACEUTICAL GROUP,Generic Pharmaceuticals,92,92,7,66,15,13,22.0,7.0,32,4
+JHSF3.SA,Capital Goods,BRA,JHSF PARTICIPACOES,Real Estate - Development,93,98,40,66,-10,12,44.0,8.0,31,6
+5TP.SI,Basic Materials,SGP,CNMC GOLDMINE HOLDINGS,Gold Mining,100,100,214,55,-28,33,24.0,2.0,102,10
+071970.KS,Industrials,KOR,HD HYUNDAI MARINE ENGINE,Specialty Industrial Machinery,82,89,101,51,-42,48,25.0,0.0,20,4
